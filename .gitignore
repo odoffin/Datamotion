@@ -46,3 +46,6 @@ next-env.d.ts
 
 # third-party agent skills (not ours to redistribute)
 .claude/skills/
+
+# DuckDB WASM assets, copied at build time by scripts/copy-duckdb-assets.mjs
+/public/duckdb/

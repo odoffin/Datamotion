@@ -1,0 +1,12 @@
+{
+  "duckdbWasm": "1.33.1-dev57.0",
+  "duckdbCore": "v1.5.4",
+  "bundles": {
+    "eh": { "module": "duckdb-eh.wasm", "worker": "duckdb-browser-eh.worker.js" },
+    "mvp": { "module": "duckdb-mvp.wasm", "worker": "duckdb-browser-mvp.worker.js" }
+  },
+  "extensions": {
+    "wasm_eh/json.duckdb_extension.wasm": "993b19f7929cc305b2529c548f2842e8e7a5b112d1c88f31c84798b51901ca16",
+    "wasm_mvp/json.duckdb_extension.wasm": "15a89d3fd0fa3449c0d8981e6cb1ca6be8df4bcaf0dfdd6660c17bcc3bdf0af8"
+  }
+}

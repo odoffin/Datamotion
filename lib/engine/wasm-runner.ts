@@ -2,6 +2,7 @@ import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import type { Field, Table } from "apache-arrow";
 import type { CheckerHandle } from "@/engine/checker-loader";
 import { normalizeValue, type QueryResult, type QueryRunner } from "@/engine/query-runner";
+import assets from "./duckdb-assets.json";
 
 interface Instance {
   db: AsyncDuckDB;
@@ -9,20 +10,28 @@ interface Instance {
   worker: Worker;
 }
 
+/** Where the build step (scripts/copy-duckdb-assets.mjs) puts the engine: our own origin. */
+const ASSET_BASE = `/duckdb/${assets.duckdbWasm}`;
+
+/** Our own mirror of the extension repository, laid out as DuckDB expects: <repo>/<version>/<platform>/<name>. */
+export const EXTENSION_REPOSITORY_PATH = "/duckdb/extensions";
+
 /**
- * Boots one duckdb-wasm instance from its jsDelivr bundles inside its own Web
- * Worker, so query work never blocks the main thread. Browser only.
+ * Boots one duckdb-wasm instance, served from our own origin, inside its own
+ * Web Worker so query work never blocks the main thread. Browser only.
  */
 async function bootInstance(signal?: AbortSignal): Promise<Instance> {
   if (typeof window === "undefined") throw new Error("DuckDB can only run in the browser.");
   const duckdb = await import("@duckdb/duckdb-wasm");
-  const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+  const url = (name: string) => new URL(`${ASSET_BASE}/${name}`, window.location.origin).href;
+  // selectBundle picks the exception-handling build when the browser supports it, else MVP.
+  const bundle = await duckdb.selectBundle({
+    mvp: { mainModule: url(assets.bundles.mvp.module), mainWorker: url(assets.bundles.mvp.worker) },
+    eh: { mainModule: url(assets.bundles.eh.module), mainWorker: url(assets.bundles.eh.worker) },
+  });
   if (!bundle.mainWorker) throw new Error("No DuckDB worker bundle available.");
-  // Cross-origin workers aren't allowed, so bootstrap via a same-origin blob.
-  const workerUrl = URL.createObjectURL(
-    new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" }),
-  );
-  const worker = new Worker(workerUrl);
+  // Same origin, so the worker loads directly (no blob: URL needed under the CSP).
+  const worker = new Worker(bundle.mainWorker);
   const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
   // If the worker script or wasm cannot be fetched (offline, blocked CDN),
   // instantiate() never settles on its own. Fail instead of hanging.
@@ -38,7 +47,6 @@ async function bootInstance(signal?: AbortSignal): Promise<Instance> {
     throw err;
   } finally {
     clearTimeout(timer);
-    URL.revokeObjectURL(workerUrl);
   }
   if (signal?.aborted) {
     worker.terminate();
@@ -76,6 +84,9 @@ export async function startWasmChecker(signal: AbortSignal): Promise<CheckerHand
   const instance = await bootInstance(signal);
   const stop = () => instance.worker.terminate();
   signal.addEventListener("abort", stop, { once: true });
+  // Fetch the json extension from our own mirror, not extensions.duckdb.org.
+  const repository = new URL(EXTENSION_REPOSITORY_PATH, window.location.origin).href;
+  await instance.conn.query(`SET custom_extension_repository = '${repository.replaceAll("'", "''")}'`);
   await instance.conn.query("LOAD json");
   if (signal.aborted) throw new Error("Aborted.");
   // Parsing needs no file or network access either.

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Third-party DuckDB files copied at build time, and vendored binaries.
+    "public/duckdb/**",
+    "vendor/**",
   ]),
 ]);
 
