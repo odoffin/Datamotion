@@ -2,11 +2,13 @@
 
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Button, Disclosure, LedgerSheet, Slip } from "@/components/ledger";
+import { Button, ButtonLink, Disclosure, LedgerSheet, Slip } from "@/components/ledger";
 import { PlaybackBar } from "@/components/PlaybackBar";
 import { ResultTable, resultCountText } from "@/components/ResultTable";
 import { FilterStage, filterCountText } from "@/components/stage/FilterStage";
+import { chapterOfLesson } from "@/content/chapters";
 import { datasets } from "@/content/datasets";
+import { getLesson } from "@/content/lessons";
 import type { LessonDefinition } from "@/content/lessons/types";
 import { prefersReducedMotion, usePrefersReducedMotion } from "@/lib/hooks/use-prefers-reduced-motion";
 import { canShowAnswer, resultVerdict } from "@/lib/lesson-status";
@@ -35,6 +37,8 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
   const showApproved = approved && !edited;
   const table = datasets[lesson.datasetId].tables.find((t) => t.name === lesson.table);
   const allHintsShown = hintsShown >= lesson.hints.length;
+  const nextLesson = lesson.nextLessonId ? getLesson(lesson.nextLessonId) : undefined;
+  const chapter = chapterOfLesson(lesson.id);
 
   useEffect(() => {
     void open(lesson);
@@ -91,7 +95,7 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
   return (
     <div
       ref={page}
-      className="mx-auto flex w-full max-w-[1440px] flex-wrap items-start gap-14 px-4 pb-[calc(var(--playback-h,0px)+6rem)] pt-10 sm:px-14 sm:pt-14"
+      className="mx-auto flex w-full max-w-[1440px] flex-wrap items-start gap-14 px-4 pb-[calc(var(--playback-h,0px)+6rem)] pt-6 sm:px-14 sm:pt-8"
     >
       {/* Explanation */}
       <section className="min-w-0 max-w-[520px] flex-[1_1_420px]">
@@ -235,19 +239,43 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
               )}
             </Slip>
 
-            {faded && (
-              <div className="rise border border-ink bg-sheet p-7 shadow-slip">
-                <p className="text-[15px] text-muted">The code has faded.</p>
-                <h2 className="mt-2.5 font-serif text-[clamp(1.75rem,4vw,2.125rem)] font-semibold tracking-[-0.01em]">
-                  You kept only the rows that passed.
-                </h2>
+            {(showApproved || faded) && (
+              <div className="rise mt-8 border border-ink bg-sheet p-6 shadow-slip sm:p-7">
+                <p className="text-[15px] text-muted">
+                  {faded ? `The code has faded. ${lesson.title} is done.` : "When you are ready to move on:"}
+                </p>
+                {nextLesson ? (
+                  <h2 className="mt-2.5 font-serif text-[clamp(1.75rem,4vw,2.125rem)] font-semibold tracking-[-0.01em]">
+                    Next: {nextLesson.title}.
+                  </h2>
+                ) : (
+                  <>
+                    <h2 className="mt-2.5 font-serif text-[clamp(1.75rem,4vw,2.125rem)] font-semibold tracking-[-0.01em]">
+                      More lessons for this chapter are on the way.
+                    </h2>
+                    <p className="mt-2 text-base leading-relaxed">
+                      This is the only written lesson so far. The map shows every chapter and what each will cover.
+                    </p>
+                  </>
+                )}
                 <div className="mt-5 flex flex-wrap gap-3">
-                  <Button ref={bringBackButton} variant="line" onClick={bringBack}>
-                    Bring my code back
-                  </Button>
-                  <Button variant="line" onClick={play}>
-                    Show me once more
-                  </Button>
+                  {nextLesson ? (
+                    <ButtonLink href={`/lesson/${nextLesson.id}`}>Start the next lesson</ButtonLink>
+                  ) : (
+                    <ButtonLink href={chapter ? `/chapters#chapter-${chapter.n}` : "/chapters"} variant={faded ? "solid" : "line"}>
+                      Back to the chapter map
+                    </ButtonLink>
+                  )}
+                  {faded && (
+                    <>
+                      <Button ref={bringBackButton} variant="line" onClick={bringBack}>
+                        Bring my code back
+                      </Button>
+                      <Button variant="line" onClick={play}>
+                        Show me once more
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             )}

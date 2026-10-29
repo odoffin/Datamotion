@@ -8,6 +8,7 @@ import { asIdle, buildLearnerScene, checkerOffScene, idleScene, type FilterScene
 import { friendlyError } from "@/engine/sql-guard";
 import { checkerRunner, engineRunner, loadDataset, prepareChecker, type RunQueryResult } from "@/lib/engine/db";
 import { completionFor, nextHintCount, type Completion } from "@/lib/lesson-status";
+import { whenProgressReady } from "@/store/progress";
 
 export type Status = "booting" | "preparing-checker" | "ready" | "running" | "error";
 
@@ -88,6 +89,7 @@ export const useLesson = create<LessonState>()((set, get) => ({
   faded: false,
 
   open: async (lesson) => {
+    whenProgressReady((p) => p.openLesson(lesson.id));
     if (get().lesson?.id !== lesson.id) {
       set({
         lesson,
@@ -144,8 +146,13 @@ export const useLesson = create<LessonState>()((set, get) => ({
     if (lesson) set({ sql: lesson.starterSql });
   },
 
-  showHint: () =>
-    set((s) => ({ hintsShown: nextHintCount(s.hintsShown, s.lesson?.hints.length ?? 0) })),
+  showHint: () => {
+    const { lesson, hintsShown } = get();
+    const next = nextHintCount(hintsShown, lesson?.hints.length ?? 0);
+    if (!lesson || next === hintsShown) return;
+    set({ hintsShown: next });
+    whenProgressReady((p) => p.recordHint(lesson.id));
+  },
 
   showAnswer: () => set({ answerShown: true }),
 
@@ -153,6 +160,7 @@ export const useLesson = create<LessonState>()((set, get) => ({
     const { lesson, sql, status } = get();
     if (!lesson || status !== "ready") return get().outcome;
     set({ status: "running", lastRunSql: sql });
+    whenProgressReady((p) => p.recordAttempt(lesson.id));
     const opts = {
       referenceSql: lesson.goal.referenceSql,
       identifiers: datasetIdentifiers(datasets[lesson.datasetId]),
@@ -197,10 +205,21 @@ export const useLesson = create<LessonState>()((set, get) => ({
     if (!check.ok) return fail({ kind: "wrong", reason: check.reason, hint: check.hint }, check.learner);
 
     const outcome: Outcome = { kind: "approved" };
-    set((s) => ({ status: "ready", outcome, result: check.learner, completion: completionFor(s.answerShown) }));
+    const completion = completionFor(get().answerShown);
+    set({ status: "ready", outcome, result: check.learner, completion });
+    whenProgressReady((p) => p.recordApproved(lesson.id, completion));
     return outcome;
   },
 
-  fade: () => set({ faded: true }),
-  bringBack: () => set({ faded: false }),
+  // Finishing is the fade: it marks the lesson done; bringing the code back undoes it.
+  fade: () => {
+    const lesson = get().lesson;
+    set({ faded: true });
+    if (lesson) whenProgressReady((p) => p.markDone(lesson.id));
+  },
+  bringBack: () => {
+    const lesson = get().lesson;
+    set({ faded: false });
+    if (lesson) whenProgressReady((p) => p.undoDone(lesson.id));
+  },
 }));

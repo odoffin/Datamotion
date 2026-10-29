@@ -1,4 +1,4 @@
-import { ButtonLink } from "@/components/ledger";
+import { LandingActions } from "@/components/home/LandingActions";
 import { BRAND_TAGLINE } from "@/lib/brand";
 
 export default function Home() {
@@ -9,11 +9,9 @@ export default function Home() {
           {BRAND_TAGLINE}
         </h1>
         <p className="mt-[22px] text-lg leading-relaxed">
-          Write a query, run it on real data, and watch every row get its verdict.
+          Write a query, run it on real data, and watch every row get its verdict. Start anywhere: nothing is locked.
         </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <ButtonLink href="/lesson/filter">Start the filtering lesson</ButtonLink>
-        </div>
+        <LandingActions />
       </section>
     </div>
   );
