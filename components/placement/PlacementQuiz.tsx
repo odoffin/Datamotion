@@ -6,10 +6,18 @@ import { useEffect, useRef, useState } from "react";
 import { Breadcrumb, Button, ButtonLink, LedgerSheet, MarginNote } from "@/components/ledger";
 import { chapterByNumber } from "@/content/chapters";
 import { useProgressHydrated } from "@/lib/hooks/use-progress-hydrated";
-import { knownChapters, QUESTIONS, recommend, score, skipRest, type Answer } from "@/lib/placement";
+import {
+  familiarChapters,
+  OPTION_LETTERS,
+  optionForKey,
+  previousAnswers,
+  QUESTIONS,
+  recommend,
+  score,
+  skipRest,
+  type Answer,
+} from "@/lib/placement";
 import { useProgress } from "@/store/progress";
-
-const LETTERS = ["A", "B", "C", "D"];
 
 const ANSWER_WORDS: Record<Answer, { text: (chapter: number) => string; className: string }> = {
   correct: { text: () => "correct", className: "text-good" },
@@ -20,10 +28,14 @@ const ANSWER_WORDS: Record<Answer, { text: (chapter: number) => string; classNam
 
 /** Six optional questions; the result is a suggestion, never a gate. */
 export function PlacementQuiz() {
-  useProgressHydrated();
+  const hydrated = useProgressHydrated();
   const savePlacement = useProgress((s) => s.savePlacement);
+  const saved = useProgress((s) => s.placement);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [picked, setPicked] = useState<number | null>(null);
+  // A saved result is only replaced after the learner confirms a retake.
+  const [retakeConfirmed, setRetakeConfirmed] = useState(false);
+  const [finishedNow, setFinishedNow] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const index = answers.length;
   const done = index >= QUESTIONS.length;
@@ -40,16 +52,81 @@ export function PlacementQuiz() {
   const finish = (all: Answer[]) => {
     setAnswers(all);
     setPicked(null);
-    if (all.length >= QUESTIONS.length) savePlacement(all, recommend(all).chapter, knownChapters(all));
+    if (all.length >= QUESTIONS.length) {
+      savePlacement(all, recommend(all).chapter, familiarChapters(all));
+      setFinishedNow(true);
+    }
   };
   const next = () => {
     if (picked === null) return;
     finish([...answers, score(q, picked)]);
   };
-
-  if (done) return <Result answers={answers} onRestart={() => finish([])} heading={heading} />;
+  const back = () => {
+    setAnswers(previousAnswers(answers));
+    setPicked(null);
+  };
+  const restart = () => {
+    setAnswers([]);
+    setPicked(null);
+    setFinishedNow(false);
+    setRetakeConfirmed(true);
+  };
 
   const answered = picked !== null;
+  const showGate = hydrated && saved !== null && !retakeConfirmed && !finishedNow;
+
+  // A to D choose an option. Scoped to this page while a question is open.
+  useEffect(() => {
+    if (done || answered || showGate || !hydrated) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.isContentEditable || el?.tagName === "INPUT" || el?.tagName === "TEXTAREA") return;
+      const i = optionForKey(e.key, q.options.length);
+      if (i !== null) {
+        e.preventDefault();
+        setPicked(i);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [done, answered, showGate, hydrated, q]);
+
+  if (!hydrated) {
+    return (
+      <div className="mx-auto w-full max-w-[920px] px-4 pb-24 pt-6 sm:px-14">
+        <p role="status" className="text-[15px] text-muted">Loading the quiz.</p>
+      </div>
+    );
+  }
+
+  if (showGate && saved) {
+    const prev = chapterByNumber(saved.recommended);
+    return (
+      <div className="mx-auto w-full max-w-[920px] px-4 pb-24 pt-6 sm:px-14">
+        <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "Chapters", href: "/chapters" }, { label: "Placement quiz" }]} />
+        <section className="mt-8">
+          <h1 className="font-serif text-[clamp(2rem,5vw,2.75rem)] font-semibold leading-[1.08] tracking-[-0.02em]">
+            You already have a quiz result.
+          </h1>
+          <p className="mt-4 text-lg leading-relaxed">
+            On {new Date(saved.takenAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })} it
+            suggested chapter {saved.recommended}{prev ? `: ${prev.name}` : ""}. Retaking the quiz replaces that result when you
+            finish.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button onClick={() => setRetakeConfirmed(true)}>Retake and replace my result</Button>
+            <ButtonLink href={`/chapters#chapter-${saved.recommended}`} variant="line">
+              Keep my result
+            </ButtonLink>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (done) return <Result answers={answers} onRestart={restart} heading={heading} />;
+
   return (
     <div className="mx-auto w-full max-w-[920px] px-4 pb-24 pt-6 sm:px-14">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
@@ -70,7 +147,11 @@ export function PlacementQuiz() {
           {q.prompt}
         </h1>
 
-        <LedgerSheet title={q.topic} className="mt-8" aria-label="Options">
+        <p className="mt-4 text-[15px] text-muted">
+          Choose with a click, or press <kbd className="font-mono text-ink">A</kbd>, <kbd className="font-mono text-ink">B</kbd>,{" "}
+          <kbd className="font-mono text-ink">C</kbd> or <kbd className="font-mono text-ink">D</kbd>.
+        </p>
+        <LedgerSheet title={q.topic} className="mt-4" aria-label="Options">
           <div role="group" aria-label="Options">
             {q.options.map((text, i) => {
               const isRight = answered && i === q.right;
@@ -82,12 +163,17 @@ export function PlacementQuiz() {
                   onClick={() => !answered && setPicked(i)}
                   aria-disabled={answered}
                   aria-pressed={picked === i}
+                  aria-keyshortcuts={OPTION_LETTERS[i]}
                   className={[
                     "grid min-h-16 w-full grid-cols-[72px_minmax(0,1fr)_auto] items-center border-b border-rule py-2 text-left text-[17px] leading-snug text-ink",
                     isRight ? "bg-good/10" : isWrong ? "bg-pen/10" : answered ? "cursor-default" : "hover:bg-wash",
                   ].join(" ")}
                 >
-                  <span className="pl-[18px] font-mono text-[15px] text-muted">{LETTERS[i]}</span>
+                  <span className="pl-[18px]">
+                    <kbd className="inline-flex h-7 w-7 items-center justify-center rounded-btn border border-ink bg-sheet font-mono text-[15px] text-ink">
+                      {OPTION_LETTERS[i]}
+                    </kbd>
+                  </span>
                   <span className={`block min-w-0 break-words pl-6 pr-3 ${q.code ? "font-mono text-[15px]" : ""}`}>{text}</span>
                   <span className="min-w-[6.5rem] pr-[18px] text-right text-sm font-semibold">
                     {isRight && (
@@ -117,6 +203,11 @@ export function PlacementQuiz() {
               <Button variant="line" onClick={() => finish(skipRest([...answers, score(q, picked)]))}>
                 I do not know this part, skip ahead
               </Button>
+              {index > 0 && (
+                <Button variant="line" onClick={back}>
+                  Back to question {index}
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -124,6 +215,11 @@ export function PlacementQuiz() {
             <Button variant="line" onClick={() => finish([...answers, "unknown"])}>
               I do not know
             </Button>
+            {index > 0 && (
+              <Button variant="line" onClick={back}>
+                Back to question {index}
+              </Button>
+            )}
             <span className="text-sm text-muted">Guessing is fine, but this one tells us more.</span>
           </div>
         )}
@@ -142,6 +238,7 @@ function Result({
   heading: React.RefObject<HTMLHeadingElement | null>;
 }) {
   const rec = recommend(answers);
+  const [confirming, setConfirming] = useState(false);
   const chapter = chapterByNumber(rec.chapter);
   const firstLesson = chapter?.lessonIds[0];
   return (
@@ -172,10 +269,25 @@ function Result({
           <ButtonLink href="/chapters" variant="line">
             Pick any chapter instead
           </ButtonLink>
-          <Button variant="line" onClick={onRestart}>
-            Retake the quiz
-          </Button>
+          {!confirming && (
+            <Button variant="line" onClick={() => setConfirming(true)}>
+              Retake the quiz
+            </Button>
+          )}
         </div>
+        {confirming && (
+          <div role="alertdialog" aria-labelledby="retake-confirm" className="mt-4 border border-ink bg-sheet p-5">
+            <p id="retake-confirm" className="text-base font-semibold">
+              Retaking replaces this result when you finish. Retake now?
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button onClick={onRestart}>Retake and replace</Button>
+              <Button variant="line" onClick={() => setConfirming(false)} autoFocus>
+                Keep this result
+              </Button>
+            </div>
+          </div>
+        )}
 
         <LedgerSheet title="Your answers" className="mt-10">
           <ul>

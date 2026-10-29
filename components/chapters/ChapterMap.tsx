@@ -1,8 +1,8 @@
 "use client";
 
-import { BadgeCheck, Check, Clock, PenLine } from "lucide-react";
+import { Check, Clock, Eye, PenLine } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Breadcrumb, ButtonLink, LedgerSheet, MarginNote } from "@/components/ledger";
+import { Breadcrumb, Button, ButtonLink, Disclosure, LedgerSheet, MarginNote } from "@/components/ledger";
 import { chapterByNumber, chapterGroups, chapterOfLesson, chapters, type Chapter } from "@/content/chapters";
 import { getLesson } from "@/content/lessons";
 import { chapterEntry, chapterStatus, prerequisiteText, type ChapterStatus } from "@/lib/chapter-status";
@@ -10,10 +10,19 @@ import { prefersReducedMotion } from "@/lib/hooks/use-prefers-reduced-motion";
 import { useProgressHydrated } from "@/lib/hooks/use-progress-hydrated";
 import { useProgress } from "@/store/progress";
 
+const LEGEND: { status: ChapterStatus; meaning: string }[] = [
+  { status: "done", meaning: "You finished every lesson in the chapter." },
+  { status: "in progress", meaning: "You have opened or run a lesson here but not finished it." },
+  { status: "not started", meaning: "Lessons are ready; you have not opened them yet." },
+  { status: "looked familiar in the quiz", meaning: "You got this chapter's quiz question right. One answer is a hint, not mastery." },
+  { status: "coming soon", meaning: "Lessons are still being written. You can read what the chapter covers." },
+];
+
 const STATUS: Record<ChapterStatus, { icon: ReactNode; className: string }> = {
   done: { icon: <Check size={15} strokeWidth={3} aria-hidden />, className: "text-good" },
   "in progress": { icon: <PenLine size={15} aria-hidden />, className: "text-ink" },
-  "tested out": { icon: <BadgeCheck size={15} aria-hidden />, className: "text-good" },
+  // Neutral, not green: one right answer in the quiz is a hint, not mastery.
+  "looked familiar in the quiz": { icon: <Eye size={15} aria-hidden />, className: "text-ink" },
   "not started": { icon: null, className: "text-muted" },
   "coming soon": { icon: <Clock size={15} aria-hidden />, className: "text-muted" },
 };
@@ -73,7 +82,23 @@ export function ChapterMap() {
         </div>
       </section>
 
-      <div className="mt-14 flex flex-wrap items-start gap-12">
+      <div className="mt-10 max-w-[720px]">
+        <Disclosure openLabel="What the status words mean" closeLabel="Hide the status words">
+          <dl className="space-y-2.5">
+            {LEGEND.map(({ status, meaning }) => (
+              <div key={status}>
+                <dt className={`flex items-center gap-1.5 font-semibold ${STATUS[status].className}`}>
+                  {STATUS[status].icon}
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </dt>
+                <dd className="text-[15px] text-ink">{meaning}</dd>
+              </div>
+            ))}
+          </dl>
+        </Disclosure>
+      </div>
+
+      <div className="mt-10 flex flex-wrap items-start gap-12">
         <LedgerSheet title="Contents" count="Pick any line" className="min-w-0 flex-[1.3_1_600px]">
           <ul>
             {chapters.map((c) => {
@@ -102,7 +127,54 @@ export function ChapterMap() {
           <ChapterDetail chapter={sel} hydrated={hydrated} />
         </aside>
       </div>
+
+      <ClearProgress />
     </div>
+  );
+}
+
+/** Two steps, so one stray click never wipes a learner's record. */
+function ClearProgress() {
+  const reset = useProgress((s) => s.reset);
+  const [stage, setStage] = useState<"idle" | "confirm" | "cleared">("idle");
+  return (
+    <section aria-labelledby="clear-progress" className="mt-16 max-w-[720px] border-t border-rule pt-6">
+      <h2 id="clear-progress" className="font-serif text-xl font-semibold">
+        Your saved progress
+      </h2>
+      <p className="mt-2 text-[15px] leading-relaxed text-muted">
+        Progress is kept in this browser only: lesson statuses, attempts, hints and your quiz result.
+      </p>
+      {stage === "confirm" ? (
+        <div role="alertdialog" aria-labelledby="clear-confirm" className="mt-4 border border-ink bg-sheet p-5">
+          <p id="clear-confirm" className="text-base font-semibold">
+            Clear all progress in this browser? This cannot be undone.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button
+              onClick={() => {
+                reset();
+                setStage("cleared");
+              }}
+            >
+              Yes, clear my progress
+            </Button>
+            <Button variant="line" onClick={() => setStage("idle")} autoFocus>
+              Keep my progress
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button variant="line" onClick={() => setStage("confirm")}>
+            Clear my progress
+          </Button>
+          <p role="status" className="text-[15px]">
+            {stage === "cleared" ? "Your progress has been cleared." : ""}
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -125,18 +197,24 @@ function ChapterRow({
       onClick={onSelect}
       aria-pressed={selected}
       className={[
-        "grid min-h-[72px] w-full grid-cols-[72px_minmax(0,1fr)_auto] items-center border-b border-rule py-2.5 text-left text-ink",
+        // Narrow screens: the status sits under the name; wider: in its own column.
+        "grid min-h-[72px] w-full grid-cols-[72px_minmax(0,1fr)] items-center border-b border-rule py-2.5 text-left text-ink sm:grid-cols-[72px_minmax(0,1fr)_auto]",
         selected ? "bg-sheet shadow-[inset_4px_0_0_var(--ink)]" : "hover:bg-wash",
       ].join(" ")}
     >
-      <span className="pl-[18px] font-mono text-base text-muted">{c.n}</span>
+      <span className="row-span-2 pl-[18px] font-mono text-base text-muted sm:row-span-1">{c.n}</span>
       <span className="block min-w-0 pl-6 pr-3">
         <span className="block font-serif text-[clamp(1.125rem,2.4vw,1.375rem)] font-semibold leading-tight">{c.name}</span>
         <span className="mt-1 block text-sm leading-normal text-muted">{c.topics}</span>
       </span>
-      <span className={`flex min-w-[6.5rem] items-center justify-end gap-1.5 pr-[18px] text-right text-sm font-semibold ${look?.className ?? ""}`}>
-        {look?.icon}
-        {status ?? " "}
+      {/* Space is reserved; while saved progress loads the word is a neutral "loading". */}
+      <span
+        className={`col-start-2 flex items-center gap-1.5 pl-6 pr-3 pt-1 text-sm font-semibold leading-snug sm:col-start-3 sm:row-start-1 sm:min-w-[6.5rem] sm:max-w-[10rem] sm:justify-end sm:pl-0 sm:pr-[18px] sm:pt-0 sm:text-right ${
+          look?.className ?? "font-normal text-muted"
+        }`}
+      >
+        {look?.icon && <span className="shrink-0">{look.icon}</span>}
+        {status ?? "loading"}
       </span>
     </button>
   );
@@ -157,7 +235,9 @@ function ChapterDetail({ chapter: c, hydrated }: { chapter: Chapter; hydrated: b
       <p className="mt-4 text-[15px] leading-relaxed">
         <strong>You will type:</strong> <code className="break-words font-mono text-sm">{c.sample}</code>
       </p>
-      <p className="mt-4 text-[15px] leading-relaxed text-muted">{hydrated ? prerequisiteText(c, progress) : " "}</p>
+      <p className="mt-4 text-[15px] leading-relaxed text-muted">
+        {hydrated ? prerequisiteText(c, progress) : "Checking what you have covered."}
+      </p>
       {c.note && <MarginNote className="mt-3.5 block">{c.note}</MarginNote>}
 
       {c.lessonIds.length === 0 && (
@@ -185,9 +265,6 @@ function ChapterDetail({ chapter: c, hydrated }: { chapter: Chapter; hydrated: b
           Test out first
         </ButtonLink>
       </div>
-      <p className="mt-3.5 text-sm leading-relaxed text-muted">
-        For now, Test out first opens the placement quiz. A short test for each chapter comes later.
-      </p>
     </div>
   );
 }

@@ -211,15 +211,12 @@ export const useLesson = create<LessonState>()((set, get) => ({
     return outcome;
   },
 
-  // Finishing is the fade: it marks the lesson done; bringing the code back undoes it.
+  // Finishing is the fade: it marks the lesson done. Bringing the code back is
+  // for looking again; the lesson stays done.
   fade: () => {
     const lesson = get().lesson;
     set({ faded: true });
     if (lesson) whenProgressReady((p) => p.markDone(lesson.id));
   },
-  bringBack: () => {
-    const lesson = get().lesson;
-    set({ faded: false });
-    if (lesson) whenProgressReady((p) => p.undoDone(lesson.id));
-  },
+  bringBack: () => set({ faded: false }),
 }));

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StateStorage } from "zustand/middleware";
+import { getStorageHealth, probeStorage, resetStorageHealthForTests } from "@/lib/storage-health";
 import { createProgressStore, lessonProgress, PROGRESS_KEY, safeStorage } from "@/store/progress";
 
 function memoryStorage(): StateStorage & { data: Map<string, string> } {
@@ -46,11 +47,31 @@ describe("progress store", () => {
     expect(store.getState().lastLessonId).toBe("filter");
   });
 
-  it("undo: bringing the code back makes the lesson in progress again", () => {
+  it("done stays done: finishing again keeps the first date, and there is no undo", () => {
     const store = createProgressStore(memoryStorage());
+    store.getState().markDone("filter", new Date("2026-10-29T12:00:00Z"));
+    store.getState().openLesson("filter");
+    store.getState().recordAttempt("filter");
+    store.getState().markDone("filter", new Date("2026-11-02T09:00:00Z"));
+    expect(lessonProgress(store.getState(), "filter")).toMatchObject({
+      status: "done",
+      finishedAt: "2026-10-29T12:00:00.000Z",
+    });
+    expect("undoDone" in store.getState()).toBe(false);
+  });
+
+  it("clear my progress: reset empties the saved record", async () => {
+    const storage = memoryStorage();
+    const store = createProgressStore(storage);
+    await store.persist.rehydrate();
     store.getState().markDone("filter");
-    store.getState().undoDone("filter");
-    expect(lessonProgress(store.getState(), "filter")).toMatchObject({ status: "in progress", finishedAt: null });
+    store.getState().savePlacement(["correct"], 2, [1]);
+    store.getState().reset();
+    const again = createProgressStore(storage);
+    await again.persist.rehydrate();
+    expect(again.getState().lessons).toEqual({});
+    expect(again.getState().placement).toBeNull();
+    expect(again.getState().knownChapters).toEqual([]);
   });
 
   it("revealed stays revealed, not mastered, even after a later clean run", () => {
@@ -72,6 +93,23 @@ describe("progress store", () => {
     expect(lessonProgress(b.getState(), "filter").status).toBe("done");
     expect(b.getState().placement?.recommended).toBe(2);
     expect(b.getState().knownChapters).toEqual([1]);
+  });
+
+  it("storage health: a working probe is ok; a refused write marks storage blocked", () => {
+    resetStorageHealthForTests();
+    expect(probeStorage(() => memoryStorage())).toBe("ok");
+    resetStorageHealthForTests();
+    expect(probeStorage(() => ({ setItem: () => { throw new Error("QuotaExceededError"); }, removeItem: () => {} }))).toBe("blocked");
+    resetStorageHealthForTests();
+    expect(probeStorage(() => undefined)).toBe("blocked");
+  });
+
+  it("storage health: any failed read or write through the safe wrapper reports blocked", async () => {
+    resetStorageHealthForTests();
+    expect(getStorageHealth()).toBe("unknown");
+    const store = createProgressStore(safeStorage(() => throwing));
+    await store.persist.rehydrate();
+    expect(getStorageHealth()).toBe("blocked");
   });
 
   it("persistence failure: blocked storage never throws and the store still works", async () => {

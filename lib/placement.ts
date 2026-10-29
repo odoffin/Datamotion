@@ -101,7 +101,24 @@ export function recommend(answers: readonly Answer[]): Recommendation {
   return { chapter, name, note, reason, caveats };
 }
 
-/** Chapters the learner tested out of: the ones whose question they got right. */
-export function knownChapters(answers: readonly Answer[]): number[] {
+/**
+ * Chapters that looked familiar in the quiz: the ones whose question was
+ * answered correctly. One right answer is a hint, not mastery.
+ */
+export function familiarChapters(answers: readonly Answer[]): number[] {
   return QUESTIONS.flatMap((q, i) => (answers[i] === "correct" ? [q.chapter] : []));
 }
+
+/** Back: reopen the previous question, unanswered. */
+export function previousAnswers(answers: readonly Answer[]): Answer[] {
+  return answers.slice(0, -1);
+}
+
+/** Keyboard shortcut A, B, C or D (either case) to an option index, if it exists. */
+export function optionForKey(key: string, optionCount: number): number | null {
+  if (key.length !== 1) return null;
+  const i = key.toUpperCase().charCodeAt(0) - 65;
+  return i >= 0 && i < Math.min(optionCount, 4) ? i : null;
+}
+
+export const OPTION_LETTERS = ["A", "B", "C", "D"] as const;

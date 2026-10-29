@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chapterByNumber, chapters } from "@/content/chapters";
-import { knownChapters, QUESTIONS, recommend, score, skipRest, type Answer } from "@/lib/placement";
+import { familiarChapters, optionForKey, previousAnswers, QUESTIONS, recommend, score, skipRest, type Answer } from "@/lib/placement";
 
 const all = (a: Answer): Answer[] => QUESTIONS.map(() => a);
 
@@ -70,7 +70,22 @@ describe("placement scoring", () => {
     expect(recommend(all("wrong")).caveats.at(-1)).toContain("Every chapter on the map is open");
   });
 
-  it("known chapters are the ones answered correctly", () => {
-    expect(knownChapters(["correct", "correct", "wrong", "correct", "skipped", "skipped"])).toEqual([1, 2, 7]);
+  it("chapters that looked familiar are the ones answered correctly", () => {
+    expect(familiarChapters(["correct", "correct", "wrong", "correct", "skipped", "skipped"])).toEqual([1, 2, 7]);
+  });
+});
+
+describe("quiz controls", () => {
+  it("Back reopens the previous question unanswered", () => {
+    expect(previousAnswers(["correct", "wrong"])).toEqual(["correct"]);
+    expect(previousAnswers([])).toEqual([]);
+  });
+  it("A to D choose options, in either case; other keys do nothing", () => {
+    expect(optionForKey("a", 4)).toBe(0);
+    expect(optionForKey("D", 4)).toBe(3);
+    expect(optionForKey("c", 2)).toBeNull();
+    expect(optionForKey("E", 4)).toBeNull();
+    expect(optionForKey("Enter", 4)).toBeNull();
+    expect(optionForKey("1", 4)).toBeNull();
   });
 });

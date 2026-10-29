@@ -1,7 +1,8 @@
 import { chapterByNumber, hasLessons, type Chapter } from "@/content/chapters";
 import type { ProgressData } from "@/store/progress";
 
-export type ChapterStatus = "done" | "in progress" | "tested out" | "not started" | "coming soon";
+/** The words shown on the map. "looked familiar in the quiz": one right answer is not mastery. */
+export type ChapterStatus = "done" | "in progress" | "looked familiar in the quiz" | "not started" | "coming soon";
 
 const lessonStatus = (p: ProgressData, id: string) => p.lessons[id]?.status ?? "not started";
 
@@ -12,24 +13,25 @@ export function chapterStatus(c: Chapter, p: ProgressData): ChapterStatus {
     if (statuses.every((s) => s === "done")) return "done";
     if (statuses.some((s) => s !== "not started")) return "in progress";
   }
-  if (p.knownChapters.includes(c.n)) return "tested out";
+  if (p.knownChapters.includes(c.n)) return "looked familiar in the quiz";
   return hasLessons(c) ? "not started" : "coming soon";
-}
-
-/** A chapter counts as covered for soft prerequisites when done or tested out. */
-function covered(n: number, p: ProgressData): boolean {
-  const c = chapterByNumber(n);
-  if (!c) return false;
-  const s = chapterStatus(c, p);
-  return s === "done" || s === "tested out";
 }
 
 /** Soft prerequisites: advice only, never a lock. */
 export function prerequisiteText(c: Chapter, p: ProgressData): string {
   if (c.prerequisites.length === 0) return "No prerequisites. A good first chapter.";
   const name = (n: number) => chapterByNumber(n)?.name ?? `chapter ${n}`;
-  const open = c.prerequisites.filter((n) => !covered(n, p));
-  if (open.length === 0) return `Builds on ${c.prerequisites.map(name).join(" and ")}, which you have covered.`;
+  const status = (n: number) => {
+    const ch = chapterByNumber(n);
+    return ch ? chapterStatus(ch, p) : "not started";
+  };
+  const statuses = c.prerequisites.map(status);
+  const names = c.prerequisites.map(name).join(" and ");
+  if (statuses.every((s) => s === "done")) return `Builds on ${names}, which you have finished.`;
+  if (statuses.every((s) => s === "done" || s === "looked familiar in the quiz")) {
+    return `Builds on ${names}, which you have finished or which looked familiar in the quiz.`;
+  }
+  const open = c.prerequisites.filter((_, i) => statuses[i] !== "done" && statuses[i] !== "looked familiar in the quiz");
   return `Works best after ${open.map(name).join(" and ")}, but you can start here if you already know it.`;
 }
 

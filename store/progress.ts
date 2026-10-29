@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import type { Answer } from "@/lib/placement";
 import type { Completion } from "@/lib/lesson-status";
+import { markStorageBlocked } from "@/lib/storage-health";
 
 export const PROGRESS_KEY = "dm.progress.v1";
 
@@ -29,7 +30,11 @@ export interface PlacementResult {
 export interface ProgressData {
   lessons: Record<string, LessonProgress>;
   placement: PlacementResult | null;
-  /** Chapters tested out of in the placement quiz. */
+  /**
+   * Chapters whose quiz question was answered correctly: they "looked
+   * familiar in the quiz". One right answer is not mastery. (The field keeps
+   * its original name so saved progress still loads.)
+   */
   knownChapters: number[];
   lastLessonId: string | null;
 }
@@ -39,9 +44,8 @@ interface ProgressActions {
   recordAttempt: (id: string) => void;
   recordHint: (id: string) => void;
   recordApproved: (id: string, completion: Completion) => void;
+  /** Finishing (the fade). Stays done: bringing the code back to look again does not undo it. */
   markDone: (id: string, at?: Date) => void;
-  /** "Bring my code back": the lesson is in progress again. */
-  undoDone: (id: string) => void;
   savePlacement: (answers: Answer[], recommended: number, known: number[], at?: Date) => void;
   reset: () => void;
 }
@@ -62,7 +66,8 @@ const blank = (): LessonProgress => ({
 /**
  * localStorage, but every access is wrapped: in private windows or with
  * blocked storage, reads return nothing and writes are dropped, and the app
- * keeps working for the session.
+ * keeps working for the session. Any failure is reported so the UI can say
+ * that progress will not be kept.
  */
 export function safeStorage(get: () => StateStorage | undefined): StateStorage {
   return {
@@ -70,6 +75,7 @@ export function safeStorage(get: () => StateStorage | undefined): StateStorage {
       try {
         return get()?.getItem(name) ?? null;
       } catch {
+        markStorageBlocked();
         return null;
       }
     },
@@ -78,13 +84,14 @@ export function safeStorage(get: () => StateStorage | undefined): StateStorage {
         get()?.setItem(name, value);
       } catch {
         // Storage full or blocked: progress lives only in memory this session.
+        markStorageBlocked();
       }
     },
     removeItem: (name) => {
       try {
         get()?.removeItem(name);
       } catch {
-        // Ignore: nothing to remove when storage is unavailable.
+        markStorageBlocked();
       }
     },
   };
@@ -116,8 +123,9 @@ export function createProgressStore(storage: StateStorage = safeStorage(browserS
               // Once revealed, a later clean run does not turn it into mastery.
               completion: p.completion === "revealed" ? "revealed" : completion,
             })),
-          markDone: (id, at = new Date()) => update(id, () => ({ status: "done", finishedAt: at.toISOString() })),
-          undoDone: (id) => update(id, () => ({ status: "in progress", finishedAt: null })),
+          // The first finish is the one that counts; finishing again keeps that date.
+          markDone: (id, at = new Date()) =>
+            update(id, (p) => ({ status: "done", finishedAt: p.finishedAt ?? at.toISOString() })),
           savePlacement: (answers, recommended, known, at = new Date()) =>
             set({ placement: { answers, recommended, takenAt: at.toISOString() }, knownChapters: known }),
           reset: () => set(empty()),

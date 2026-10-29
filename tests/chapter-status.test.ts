@@ -20,8 +20,8 @@ describe("chapter status", () => {
     expect(chapterStatus(filtering, { ...base, lessons: lesson("in progress") })).toBe("in progress");
     expect(chapterStatus(filtering, { ...base, lessons: lesson("done") })).toBe("done");
   });
-  it("tested out in the placement quiz", () => {
-    expect(chapterStatus(chapterByNumber(1)!, { ...base, knownChapters: [1] })).toBe("tested out");
+  it("a right quiz answer only 'looked familiar', it is not shown as mastery", () => {
+    expect(chapterStatus(chapterByNumber(1)!, { ...base, knownChapters: [1] })).toBe("looked familiar in the quiz");
   });
   it("the start button reflects progress", () => {
     expect(chapterEntry(filtering, base)?.label).toBe("Start chapter 3");
@@ -31,6 +31,8 @@ describe("chapter status", () => {
   it("prerequisites are advice, never a lock", () => {
     expect(prerequisiteText(chapterByNumber(1)!, base)).toBe("No prerequisites. A good first chapter.");
     expect(prerequisiteText(filtering, base)).toBe("Works best after Query basics, but you can start here if you already know it.");
-    expect(prerequisiteText(filtering, { ...base, knownChapters: [2] })).toBe("Builds on Query basics, which you have covered.");
+    expect(prerequisiteText(filtering, { ...base, knownChapters: [2] })).toBe(
+      "Builds on Query basics, which you have finished or which looked familiar in the quiz.",
+    );
   });
 });
