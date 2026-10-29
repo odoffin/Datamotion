@@ -51,6 +51,21 @@ below about 900px. No horizontal page scroll at 360px. Touch targets at least 44
 WCAG AA contrast. aria-live="polite" on narration, role="alert" on diagnostics, role="status" on success.
 Full keyboard use. Space/arrow shortcuts only on the playback bar, never global.
 
+## Usability heuristics
+Based on the NN/g ten usability heuristics (nngroup.com/articles/ten-usability-heuristics).
+One line each on how the app meets it. These are rules: a screen that breaks one is a bug.
+
+1. Visibility of system status: every loading or failure state is visible and in plain words (starting the database, preparing the checker, running), and the narration says what the database is doing to each row.
+2. Match between the system and the real world: the notebook speaks the learner's language (request slip, ledger, red pen, kept and dropped), never engine terms like "predicate" or "binder".
+3. User control and freedom: every animation can be paused, stepped and restarted, and Start over and Bring my code back undo without penalty.
+4. Consistency and standards: one Ledger system everywhere (same tokens, two button styles, row states always as icon plus word) and standard SQL with the same colours in every editor and diagnostic.
+5. Error prevention: code fades only after a correct attempt, and "Show me once more" is always available; the read-only sandbox means no query can damage the data.
+6. Recognition rather than recall: the schema and column names stay visible next to the editor, so nobody has to remember what a table holds.
+7. Flexibility and efficiency of use: chapters are never locked, the placement quiz is optional, and keyboard users get Enter to run and playback keys.
+8. Aesthetic and minimalist design: one idea per screen, long explanations behind "Read the long version", and no decoration that does not carry meaning.
+9. Help users recognise, diagnose and recover from errors: every error names the problem and a fix, with the red pen circling the exact word.
+10. Help and documentation: hints nudge without giving the answer away, and the long explanation is one click away inside the lesson.
+
 ## Never
 Invented stats, fake testimonials, emoji as icons, purple-blue gradients, cards inside cards,
 tracked-capital labels, middle-dot-joined meta strings, decorative status dots.
