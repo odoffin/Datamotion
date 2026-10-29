@@ -1,3 +1,3 @@
-/** Single source of truth for the product name (working title). */
-export const BRAND_NAME = "Datamotion";
+/** Single source of truth for the product name. */
+export const BRAND_NAME = "Datapen";
 export const BRAND_TAGLINE = "Watch your SQL run.";

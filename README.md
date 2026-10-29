@@ -1,11 +1,11 @@
-# Datamotion
+# Datapen
 
 A web app that teaches SQL by animating real code execution. Each lesson runs
 the learner's own query on a real database in the browser
 ([DuckDB WASM](https://duckdb.org/docs/api/wasm/overview)), circles mistakes
 in red pen, and animates the result row by row from the actual execution.
 
-The name is a working title; it lives in `lib/brand.ts`.
+The product name lives in `lib/brand.ts`.
 
 ## What is in it
 
