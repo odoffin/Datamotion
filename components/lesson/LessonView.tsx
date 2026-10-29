@@ -6,16 +6,20 @@ import { Button, Disclosure, LedgerSheet, Slip } from "@/components/ledger";
 import { PlaybackBar } from "@/components/PlaybackBar";
 import { ResultTable, resultCountText } from "@/components/ResultTable";
 import { FilterStage, filterCountText } from "@/components/stage/FilterStage";
+import { datasets } from "@/content/datasets";
 import type { LessonDefinition } from "@/content/lessons/types";
 import { prefersReducedMotion, usePrefersReducedMotion } from "@/lib/hooks/use-prefers-reduced-motion";
+import { canShowAnswer, resultVerdict } from "@/lib/lesson-status";
 import { useLesson } from "@/store/lesson";
 import { usePlayback } from "@/store/playback";
 import { DiagnosticStrip } from "./DiagnosticStrip";
 import { QueryEditor } from "./QueryEditor";
+import { SchemaCard } from "./SchemaCard";
 
 export function LessonView({ lesson }: { lesson: LessonDefinition }) {
   const { sql, status, fatal, checkerReady, outcome, attempt, scene, result, faded } = useLesson();
-  const { setSql, startOver, run, fade, bringBack, open } = useLesson();
+  const { lastRunSql, hintsShown, answerShown, completion } = useLesson();
+  const { setSql, startOver, run, fade, bringBack, open, showHint, showAnswer } = useLesson();
   const { stepIndex, reset } = usePlayback();
   const reducedMotion = usePrefersReducedMotion();
   const ids = { slip: useId(), keys: useId() };
@@ -25,6 +29,11 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
   const ledger = useRef<HTMLDivElement>(null);
   const bringBackButton = useRef<HTMLButtonElement>(null);
   const approved = outcome.kind === "approved";
+  // The text differs from what last ran: verdicts below belong to the old text.
+  const edited = lastRunSql !== null && sql !== lastRunSql;
+  const showApproved = approved && !edited;
+  const table = datasets[lesson.datasetId].tables.find((t) => t.name === lesson.table);
+  const allHintsShown = hintsShown >= lesson.hints.length;
 
   useEffect(() => {
     void open(lesson);
@@ -101,89 +110,144 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
 
       {/* Workspace */}
       <section aria-label="Workspace" className="flex min-w-0 flex-[1.4_1_560px] flex-col gap-8">
-        <Slip gone={faded}>
-          <p id={ids.slip} className="text-sm text-muted">
-            Request slip. Type your query below.
-          </p>
-          <div className="mt-3">
-            <QueryEditor value={sql} onChange={setSql} onRun={() => void runQuery()} label="SQL query" describedBy={`${ids.slip} ${ids.keys}`} />
-          </div>
-          <p id={ids.keys} className="mt-2 text-sm text-muted">
-            Enter runs the query. Shift+Enter starts a new line. Escape, then Tab, leaves the slip.
-          </p>
-          <p role="status" className="mt-2 flex items-center gap-2 text-sm text-ink empty:mt-0">
-            {bootLine && <LoaderCircle size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />}
-            {bootLine ??
-              (status === "ready" && !checkerReady
-                ? "The checker could not load, so mistakes are found by running the query. Everything else works."
-                : null)}
-          </p>
-
-          {outcome.kind === "diagnostic" && <DiagnosticStrip diagnosis={outcome.diagnosis} attempt={attempt} />}
-
-          {outcome.kind === "system" && (
-            <p role="alert" className="mt-6 text-base text-pen">
-              {outcome.message} Reload the page to try again.
-            </p>
-          )}
-
-          {outcome.kind === "wrong" && (
-            <div role="alert" className="mt-6">
-              <p className="font-serif text-2xl font-semibold text-pen">Not approved yet.</p>
-              <p className="mt-2 text-base leading-relaxed">{outcome.hint}</p>
+        {/* The schema sits beside the slip on wide screens and above it on narrow ones. */}
+        <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_14rem]">
+          {table && (
+            <div className="lg:col-start-2 lg:row-start-1">
+              <SchemaCard table={table} />
             </div>
           )}
-
-          {approved ? (
-            <div role="status" className="mt-6">
-              <p className="font-serif text-2xl font-semibold text-good">Approved. The ledger below shows what survived.</p>
-              <p className="mt-2.5 text-base leading-relaxed">
-                When you feel sure of WHERE, let the code fade and move on.
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+            <Slip gone={faded}>
+              <p id={ids.slip} className="text-sm text-muted">
+                Request slip. Type your query below.
               </p>
-              <div className="mt-[18px] flex flex-wrap gap-3">
-                <Button onClick={fade}>I&apos;ve got it, fade the code</Button>
-                <Button variant="line" onClick={play}>
-                  Show me once more
-                </Button>
+              <div className="mt-3">
+                <QueryEditor value={sql} onChange={setSql} onRun={() => void runQuery()} label="SQL query" describedBy={`${ids.slip} ${ids.keys}`} />
               </div>
-            </div>
-          ) : (
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button onClick={() => void runQuery()} disabled={status !== "ready"}>
-                {busy && <LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden />}
-                {status === "booting"
-                  ? "Starting the database"
-                  : status === "preparing-checker"
-                    ? "Preparing the checker"
-                    : status === "running"
-                      ? "Running"
-                      : "Run the query"}
-              </Button>
-              <Button variant="line" onClick={startOver} disabled={busy}>
-                Start over
-              </Button>
-            </div>
-          )}
-          {fatal && (
-            <p role="alert" className="mt-4 text-base text-pen">
-              {fatal}
-            </p>
-          )}
-        </Slip>
+              <p id={ids.keys} className="mt-2 text-sm text-muted">
+                Enter runs the query. Shift+Enter starts a new line. Escape, then Tab, leaves the slip.
+              </p>
+              {/* Polite live region: start-up, running, and checker fallback. */}
+              <p role="status" aria-live="polite" className="mt-2 flex items-center gap-2 text-sm text-ink empty:mt-0">
+                {bootLine && <LoaderCircle size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />}
+                {bootLine ??
+                  (status === "ready" && !checkerReady
+                    ? "The checker could not load, so mistakes are found by running the query. Everything else works."
+                    : null)}
+              </p>
+              {edited && outcome.kind !== "idle" && (
+                <p className="mt-2 text-sm font-semibold">You&apos;ve edited the query since the last run.</p>
+              )}
 
-        {faded && (
-          <div className="rise border border-ink bg-sheet p-7 shadow-slip">
-            <p className="text-[15px] text-muted">The code has faded.</p>
-            <h2 className="mt-2.5 font-serif text-[clamp(1.75rem,4vw,2.125rem)] font-semibold tracking-[-0.01em]">
-              You kept only the rows that passed.
-            </h2>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Button ref={bringBackButton} variant="line" onClick={bringBack}>
-                Bring my code back
-              </Button>
-            </div>
+              {outcome.kind === "diagnostic" && (
+                <DiagnosticStrip diagnosis={outcome.diagnosis} attempt={attempt} stale={edited} />
+              )}
+
+              {outcome.kind === "system" && (
+                <p role="alert" className="mt-6 text-base text-pen">
+                  {outcome.message} Reload the page to try again.
+                </p>
+              )}
+
+              {outcome.kind === "wrong" && (
+                <div role="alert" className="mt-6">
+                  {edited && <p className="mb-1 text-sm text-muted">From your last run. Run again to check your changes.</p>}
+                  <p className="font-serif text-2xl font-semibold text-pen">Not approved yet.</p>
+                  <p className="mt-2 text-base leading-relaxed">{outcome.hint}</p>
+                </div>
+              )}
+
+              {showApproved ? (
+                <div role="status" className="mt-6">
+                  <p className="font-serif text-2xl font-semibold text-good">Approved. The ledger below shows what survived.</p>
+                  <p className="mt-2.5 text-base leading-relaxed">
+                    {completion === "revealed"
+                      ? "You finished with the answer shown, so this exercise counts as revealed, not mastered."
+                      : "When you feel sure of WHERE, let the code fade and move on."}
+                  </p>
+                  <div className="mt-[18px] flex flex-wrap gap-3">
+                    <Button onClick={fade}>I&apos;ve got it, fade the code</Button>
+                    <Button variant="line" onClick={play}>
+                      Show me once more
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Button onClick={() => void runQuery()} disabled={status !== "ready"}>
+                    {busy && <LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden />}
+                    {status === "booting"
+                      ? "Starting the database"
+                      : status === "preparing-checker"
+                        ? "Preparing the checker"
+                        : status === "running"
+                          ? "Running"
+                          : "Run the query"}
+                  </Button>
+                  <Button variant="line" onClick={startOver} disabled={busy}>
+                    Start over
+                  </Button>
+                </div>
+              )}
+
+              {/* Help on request only: hints one at a time, then the answer. */}
+              {!showApproved && (
+                <div className="mt-5 border-t border-rule pt-4">
+                  <div className="flex flex-wrap gap-3">
+                    <Button variant="line" onClick={showHint} disabled={allHintsShown || lesson.hints.length === 0}>
+                      {allHintsShown ? "No more hints" : hintsShown === 0 ? "Show a hint" : "Show another hint"}
+                    </Button>
+                    {canShowAnswer(attempt, hintsShown) && !answerShown && (
+                      <Button variant="line" onClick={showAnswer}>
+                        Show the answer
+                      </Button>
+                    )}
+                  </div>
+                  <ol aria-live="polite" className="mt-3 list-decimal space-y-1.5 pl-5 text-[15px] leading-relaxed empty:hidden">
+                    {lesson.hints.slice(0, hintsShown).map((h) => (
+                      <li key={h}>{h}</li>
+                    ))}
+                  </ol>
+                  {answerShown && (
+                    <div aria-live="polite" className="mt-4">
+                      <p className="text-[15px]">One answer that works:</p>
+                      <p className="mt-1 break-words font-mono text-base">{lesson.goal.referenceSql}</p>
+                      <p className="mt-2 text-sm text-muted">
+                        You can still finish, but this exercise will count as revealed, not mastered.
+                      </p>
+                      <Button variant="line" className="mt-3" onClick={() => setSql(lesson.goal.referenceSql)}>
+                        Put it on the slip
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {fatal && (
+                <p role="alert" className="mt-4 text-base text-pen">
+                  {fatal}
+                </p>
+              )}
+            </Slip>
+
+            {faded && (
+              <div className="rise border border-ink bg-sheet p-7 shadow-slip">
+                <p className="text-[15px] text-muted">The code has faded.</p>
+                <h2 className="mt-2.5 font-serif text-[clamp(1.75rem,4vw,2.125rem)] font-semibold tracking-[-0.01em]">
+                  You kept only the rows that passed.
+                </h2>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <Button ref={bringBackButton} variant="line" onClick={bringBack}>
+                    Bring my code back
+                  </Button>
+                  <Button variant="line" onClick={play}>
+                    Show me once more
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         <div ref={ledger} className="scroll-mt-4">
           <LedgerSheet
@@ -221,10 +285,7 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
 
         <LedgerSheet aria-label="Your query's result" title="Your result" count={result ? resultCountText(result) : undefined} margin={false}>
           {result ? (
-            <ResultTable
-              result={result}
-              verdict={approved ? { ok: true, text: "Matches the goal" } : { ok: false, text: "Does not match the goal yet" }}
-            />
+            <ResultTable result={result} verdict={resultVerdict(outcome.kind, edited)} />
           ) : (
             <p className="px-5 py-4 text-muted">Run a query to see what DuckDB returns.</p>
           )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { history, historyKeymap, insertNewlineAndIndent } from "@codemirror/commands";
 import { sql } from "@codemirror/lang-sql";
 import { syntaxHighlighting } from "@codemirror/language";
 import { EditorState, Prec } from "@codemirror/state";
@@ -38,7 +39,7 @@ interface QueryEditorProps {
   describedBy?: string;
 }
 
-/** Multi-line CodeMirror 6 SQL editor for the request slip. */
+/** Multi-line CodeMirror 6 SQL editor for the request slip, with undo and redo. */
 export function QueryEditor({ value, onChange, onRun, label, describedBy }: QueryEditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -59,12 +60,13 @@ export function QueryEditor({ value, onChange, onRun, label, describedBy }: Quer
             keymap.of([
               { key: "Enter", run: () => (handlers.current.onRun(), true) },
               { key: "Mod-Enter", run: () => (handlers.current.onRun(), true) },
-              {
-                key: "Shift-Enter",
-                run: (v) => (v.dispatch(v.state.replaceSelection("\n"), { scrollIntoView: true }), true),
-              },
+              { key: "Shift-Enter", run: insertNewlineAndIndent },
             ]),
           ),
+          // Undo and redo: Mod-z, Mod-Shift-z (and Mod-y). Outside changes such
+          // as Start over go through a transaction too, so they can be undone.
+          history(),
+          keymap.of(historyKeymap),
           sql(),
           theme,
           syntaxHighlighting(ledgerSqlHighlight),

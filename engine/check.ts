@@ -111,6 +111,8 @@ export interface LocateOptions {
   referenceSql?: string;
   /** Table and column names, so `orders` is never mistaken for ORDER. */
   identifiers?: readonly string[];
+  /** Tables that exist, listed when the learner names one that does not. */
+  tables?: readonly string[];
 }
 
 /**
@@ -204,18 +206,37 @@ export interface Diagnosis {
   index: number;
   note: string;
   message: string;
-  hint?: string;
+  /** What to do about it. Every diagnosis names a fix. */
+  hint: string;
 }
 
 function quote(t: Token | undefined): string {
   return t ? `"${t.text}"` : "it";
 }
 
+const isWordLike = (t: Token) => t.kind !== "op" && t.kind !== "punct";
+
+/** 1-based position among words only, so symbols like * are not counted. */
+export function wordNumber(tokens: Token[], index: number): number {
+  return tokens.slice(0, index + 1).filter(isWordLike).length;
+}
+
+function listWords(words: readonly string[]): string {
+  if (words.length <= 1) return words.join("");
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
+const COMPARE_HINT =
+  "Compare it with the goal, clause by clause: which columns (SELECT), which table (FROM), which rule (WHERE).";
+
 /** Everything the diagnostic strip shows for one failed run. */
 export function diagnose(sql: string, error: SqlError, opts: LocateOptions = {}): Diagnosis {
   const tokens = lex(sql);
-  if (error.kind === "empty" || error.kind === "blocked") {
-    return { tokens, index: -1, note: error.kind === "empty" ? "write a query here" : "one SELECT only", message: error.message };
+  if (error.kind === "empty") {
+    return { tokens, index: -1, note: "write a query here", message: error.message, hint: "Start with SELECT, then FROM and the table name." };
+  }
+  if (error.kind === "blocked") {
+    return { tokens, index: -1, note: "one SELECT only", message: error.message, hint: "Keep a single query that starts with SELECT and delete the rest." };
   }
   const index = locateErrorToken(sql, error, opts);
   const note = expectedHint(sql, opts.referenceSql, index, error, opts.identifiers);
@@ -227,33 +248,44 @@ export function diagnose(sql: string, error: SqlError, opts: LocateOptions = {})
   const missingTable = /Table with name (\S+) does not exist/i.exec(error.message)?.[1];
 
   let message: string;
-  let hint: string | undefined;
+  let hint: string;
   if (tok?.unterminated) {
     message = "This text starts with a quote but never closes it.";
-    hint = "Text values need a quote at both ends, like 'Lagos'.";
+    hint = "Add the closing quote, so text values look like 'Lagos'.";
   } else if (note.startsWith("expected ") && tok && !note.endsWith(" next")) {
-    message = `Word ${index + 1} should be "${note.slice(9)}", but you typed ${quote(tok)}.`;
-    hint = kw ? "Check the spelling letter by letter." : undefined;
+    const want = note.slice(9);
+    message = isWordLike(tok)
+      ? `Word ${wordNumber(tokens, index)} should be "${want}", but you typed ${quote(tok)}.`
+      : `The symbol ${quote(tok)} should be "${want}".`;
+    hint = kw
+      ? "Check the spelling letter by letter."
+      : "Change it to match the table and column names beside the slip, then run again.";
   } else if (note.endsWith(" next")) {
     message = `The query stops early. It needs "${note.slice(9, -5)}" next.`;
     hint = "Every comparison needs a value on both sides.";
   } else if (note.endsWith(" goes before this")) {
-    message = `Something is missing before ${quote(tok)}.`;
+    message = `"${note.slice(0, -17)}" is missing before ${quote(tok)}.`;
     hint = "Read the query aloud: SELECT what, FROM which table, WHERE what rule.";
   } else if (note === "nothing more needed here") {
     message = `There is extra text DuckDB cannot use: ${quote(tok)}.`;
     hint = "Delete it and run again.";
   } else if (missingCol) {
     message = `There is no column called ${missingCol}.${cand ? ` Did you mean ${cand}?` : ""}`;
-    hint = "Column names must match the table exactly.";
+    hint = "Use one of the column names listed beside the slip.";
   } else if (missingTable) {
+    const tables = opts.tables ?? [];
     message = `There is no table called ${missingTable}.${cand ? ` Did you mean ${cand}?` : ""}`;
+    hint = tables.length
+      ? `The tables that exist are ${listWords(tables)}.`
+      : "Use the table name shown beside the slip.";
   } else if (index >= tokens.length) {
     message = "The query stops before it is finished.";
+    hint = COMPARE_HINT;
   } else {
     message = friendlyError(error.message);
+    hint = COMPARE_HINT;
   }
-  return { tokens, index, note, message, ...(hint ? { hint } : {}) };
+  return { tokens, index, note, message, hint };
 }
 
 export type CheckReason =

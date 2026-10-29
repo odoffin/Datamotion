@@ -1,4 +1,5 @@
-import { CircleAlert, CircleCheck } from "lucide-react";
+import { CircleAlert, CircleCheck, History } from "lucide-react";
+import type { ResultVerdict } from "@/lib/lesson-status";
 import type { RunQueryResult } from "@/lib/engine/db";
 import { formatCell } from "./stage/format";
 
@@ -11,7 +12,7 @@ export function resultCountText(result: RunQueryResult): string {
 interface ResultTableProps {
   result: RunQueryResult;
   /** A verdict line above the rows, e.g. whether they meet the goal. */
-  verdict?: { ok: boolean; text: string };
+  verdict?: ResultVerdict | null;
 }
 
 /** DuckDB's actual output for the learner's query. */
@@ -26,12 +27,19 @@ export function ResultTable({ result, verdict }: ResultTableProps) {
   return (
     <>
       {verdict && (
-        <p className={`flex items-center gap-2 px-5 py-3 text-[15px] font-semibold ${verdict.ok ? "text-good" : "text-pen"}`}>
-          {verdict.ok ? <CircleCheck size={16} aria-hidden /> : <CircleAlert size={16} aria-hidden />}
+        <p
+          className={`flex items-center gap-2 px-5 py-3 text-[15px] font-semibold ${
+            verdict.tone === "ok" ? "text-good" : verdict.tone === "bad" ? "text-pen" : "text-ink"
+          }`}
+        >
+          {verdict.tone === "ok" && <CircleCheck size={16} aria-hidden />}
+          {verdict.tone === "bad" && <CircleAlert size={16} aria-hidden />}
+          {verdict.tone === "stale" && <History size={16} aria-hidden />}
           {verdict.text}
         </p>
       )}
-      <div className="max-h-[28rem] overflow-auto border-t border-rule">
+      {/* Rows from an older query stay readable but visibly out of date. */}
+      <div className={`max-h-[28rem] overflow-auto border-t border-rule ${verdict?.tone === "stale" ? "opacity-60" : ""}`}>
         <table className="w-full border-collapse font-mono text-sm">
           <thead className="sticky top-0 bg-sheet">
             <tr>

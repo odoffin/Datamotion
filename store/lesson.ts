@@ -6,6 +6,7 @@ import { checkAnswer, diagnose, parseCheck, runtimeError, type CheckReason, type
 import { buildFilterScene, type FilterScene } from "@/engine/scenes/filter";
 import { friendlyError } from "@/engine/sql-guard";
 import { checkerRunner, engineRunner, loadDataset, prepareChecker, type RunQueryResult } from "@/lib/engine/db";
+import { completionFor, nextHintCount, type Completion } from "@/lib/lesson-status";
 
 export type Status = "booting" | "preparing-checker" | "ready" | "running" | "error";
 
@@ -31,6 +32,14 @@ interface LessonState {
   outcome: Outcome;
   /** Counts failed runs, so the shake replays each time. */
   attempt: number;
+  /** The text of the last run; differs from `sql` once the learner edits. */
+  lastRunSql: string | null;
+  /** How many of the lesson's hints the learner has asked for. */
+  hintsShown: number;
+  /** The learner chose "Show the answer". */
+  answerShown: boolean;
+  /** Set on approval: mastered, or revealed if the answer had been shown. */
+  completion: Completion | null;
   /** The ledger for the lesson's table; plays once the answer is approved. */
   scene: FilterScene | null;
   /** The learner's own rows from DuckDB, whenever their query ran. */
@@ -40,6 +49,8 @@ interface LessonState {
   setSql: (sql: string) => void;
   startOver: () => void;
   run: () => Promise<Outcome>;
+  showHint: () => void;
+  showAnswer: () => void;
   fade: () => void;
   bringBack: () => void;
 }
@@ -55,6 +66,10 @@ export const useLesson = create<LessonState>()((set, get) => ({
   checkerReady: false,
   outcome: { kind: "idle" },
   attempt: 0,
+  lastRunSql: null,
+  hintsShown: 0,
+  answerShown: false,
+  completion: null,
   scene: null,
   result: null,
   faded: false,
@@ -68,6 +83,10 @@ export const useLesson = create<LessonState>()((set, get) => ({
         fatal: null,
         outcome: { kind: "idle" },
         attempt: 0,
+        lastRunSql: null,
+        hintsShown: 0,
+        answerShown: false,
+        completion: null,
         scene: null,
         result: null,
         faded: false,
@@ -93,21 +112,29 @@ export const useLesson = create<LessonState>()((set, get) => ({
     set({ status: "ready" });
   },
 
-  // Typing clears the last verdict, like picking up the pen again.
-  setSql: (sql) => set((s) => ({ sql, outcome: s.outcome.kind === "idle" ? s.outcome : { kind: "idle" } })),
+  // The last verdict (and the red pen) stays until the next run; the UI marks
+  // it as belonging to the previous text once sql !== lastRunSql.
+  setSql: (sql) => set({ sql }),
 
+  // Only the text is reset (the editor records it, so it can be undone).
   startOver: () => {
     const lesson = get().lesson;
-    if (lesson) set({ sql: lesson.starterSql, outcome: { kind: "idle" }, result: null });
+    if (lesson) set({ sql: lesson.starterSql });
   },
+
+  showHint: () =>
+    set((s) => ({ hintsShown: nextHintCount(s.hintsShown, s.lesson?.hints.length ?? 0) })),
+
+  showAnswer: () => set({ answerShown: true }),
 
   run: async () => {
     const { lesson, sql, status } = get();
     if (!lesson || status !== "ready") return get().outcome;
-    set({ status: "running" });
+    set({ status: "running", lastRunSql: sql });
     const opts = {
       referenceSql: lesson.goal.referenceSql,
       identifiers: datasetIdentifiers(datasets[lesson.datasetId]),
+      tables: datasets[lesson.datasetId].tables.map((t) => t.name),
     };
     const fail = (outcome: Outcome, result: RunQueryResult | null = null): Outcome => {
       set((s) => ({ status: "ready", outcome, result, attempt: s.attempt + 1 }));
@@ -137,7 +164,7 @@ export const useLesson = create<LessonState>()((set, get) => ({
     if (!check.ok) return fail({ kind: "wrong", reason: check.reason, hint: check.hint }, check.learner);
 
     const outcome: Outcome = { kind: "approved" };
-    set({ status: "ready", outcome, result: check.learner });
+    set((s) => ({ status: "ready", outcome, result: check.learner, completion: completionFor(s.answerShown) }));
     return outcome;
   },
 

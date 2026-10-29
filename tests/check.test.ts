@@ -22,6 +22,7 @@ beforeAll(async () => {
 
 const ref = filterLesson.goal.referenceSql;
 const identifiers = datasetIdentifiers(shop);
+const tables = shop.tables.map((t) => t.name);
 
 /** Parse, then run, exactly as the lesson does; returns the first error. */
 async function errorFor(sql: string): Promise<SqlError | null> {
@@ -34,7 +35,7 @@ async function errorFor(sql: string): Promise<SqlError | null> {
 async function pointAt(sql: string, withReference = true) {
   const error = await errorFor(sql);
   if (!error) throw new Error(`expected an error for: ${sql}`);
-  const d = diagnose(sql, error, { identifiers, ...(withReference ? { referenceSql: ref } : {}) });
+  const d = diagnose(sql, error, { identifiers, tables, ...(withReference ? { referenceSql: ref } : {}) });
   const word = d.index >= 0 && d.index < d.tokens.length ? d.tokens[d.index]?.text : d.index === -1 ? "<all>" : "<end>";
   return { ...d, word, error };
 }
@@ -72,6 +73,8 @@ describe("error pointing", () => {
     const d = await pointAt("SELECT * FORM orders WHERE amount > 50");
     expect(d.word).toBe("FORM");
     expect(d.note).toBe("expected FROM");
+    // * is a symbol, not a word: FORM is word 2.
+    expect(d.message).toBe('Word 2 should be "FROM", but you typed "FORM".');
   });
 
   it("keyword typo with a different-but-valid query still finds the typo", async () => {
@@ -106,6 +109,47 @@ describe("error pointing", () => {
     const d = await pointAt("SELECT * FROM ordrs WHERE amount > 50");
     expect(d.word).toBe("ordrs");
     expect(d.note).toBe("expected orders");
+  });
+
+  it("an unknown table far from the answer lists the tables that exist", async () => {
+    const d = await pointAt("SELECT id FROM sales", false);
+    expect(d.word).toBe("sales");
+    expect(d.message).toContain("no table called sales");
+    expect(d.hint).toBe("The tables that exist are customers, products and orders.");
+  });
+
+  it("the generic fallback says what to compare against", () => {
+    const sql = "SELECT 1";
+    const d = diagnose(sql, { kind: "runtime", message: "Some odd internal error" }, { identifiers });
+    expect(d.hint).toContain("Compare it with the goal");
+  });
+
+  it("every error names the problem and a fix", async () => {
+    for (const sql of [
+      "SELECT * FORM orders WHERE amount > 50",
+      "SELECT * orders WHERE amount > 50",
+      "SELECT * FROM orders WHERE amout > 50",
+      "SELECT * FROM ordrs WHERE amount > 50",
+      "SELECT * FROM orders WHERE amount >",
+      "SELECT * FROM orders WHERE amount > 50 lol",
+      "SELECT * FROM customers WHERE city = 'Lagos",
+      "SELECT id FROM sales",
+      "",
+      "DROP TABLE orders",
+    ]) {
+      const error = await errorFor(sql);
+      if (!error) throw new Error(sql);
+      const d = diagnose(sql, error, { identifiers, tables, referenceSql: ref });
+      expect(d.message.length, sql).toBeGreaterThan(0);
+      expect(d.hint.length, sql).toBeGreaterThan(0);
+    }
+  });
+
+  it("names an operator a symbol, not a word", async () => {
+    const d = await pointAt("SELECT * FROM orders WHERE amount ! 50");
+    // One edit from the reference: the symbol is circled.
+    expect(d.word).toBe("!");
+    expect(d.message).toBe('The symbol "!" should be ">".');
   });
 
   it("missing operand: points past the end", async () => {

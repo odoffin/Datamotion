@@ -14,13 +14,15 @@ interface DiagnosticStripProps {
   diagnosis: Diagnosis;
   /** Failed-run counter; its parity picks the shake keyframes so it replays. */
   attempt: number;
+  /** The learner has edited since this run; the note stays, labelled as old. */
+  stale?: boolean;
 }
 
 /**
  * The learner's tokens in mono with the wrong one circled in red pen, shaken
  * once, and a Caveat note directly underneath saying what was expected.
  */
-export function DiagnosticStrip({ diagnosis, attempt }: DiagnosticStripProps) {
+export function DiagnosticStrip({ diagnosis, attempt, stale = false }: DiagnosticStripProps) {
   const { tokens, index, note, message, hint } = diagnosis;
   const shake = attempt % 2 === 0 ? "shake-a" : "shake-b";
   const missingAtEnd = index >= tokens.length;
@@ -53,6 +55,7 @@ export function DiagnosticStrip({ diagnosis, attempt }: DiagnosticStripProps) {
 
   return (
     <div className="mt-6">
+      {stale && <p className="mb-1 text-sm text-muted">From your last run. Run again to check your changes.</p>}
       <div role="alert">
         <p className="sr-only">
           The red pen circles {badText}: {note}.
