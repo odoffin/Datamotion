@@ -1,8 +1,9 @@
 import type { Dataset } from "@/content/datasets/types";
-import type { QueryResult } from "@/engine/query-runner";
+import { loadChecker, type CheckerLoad } from "@/engine/checker-loader";
+import type { QueryResult, QueryRunner } from "@/engine/query-runner";
 import { datasetStatements } from "@/engine/sql";
 import { friendlyError, guardReadOnly } from "@/engine/sql-guard";
-import { prepareSandbox, wasmRunner, type SandboxStatus } from "./wasm-runner";
+import { startWasmChecker, wasmRunner } from "./wasm-runner";
 
 export type RunQueryResult = QueryResult;
 
@@ -30,21 +31,27 @@ export function loadDataset(dataset: Dataset): Promise<string | null> {
   return pending;
 }
 
-/** Loads the checker and locks the sandbox. Never throws. */
-export async function prepareChecker(): Promise<SandboxStatus | { checker: false; error: string; locked: false }> {
-  try {
-    return await prepareSandbox();
-  } catch (err) {
-    return { checker: false, error: err instanceof Error ? err.message : String(err), locked: false };
-  }
+let checker: Promise<CheckerLoad> | null = null;
+
+/**
+ * Loads the query checker once, giving up after 12 seconds so a slow
+ * connection behaves like an offline one. Never throws.
+ */
+export function prepareChecker(): Promise<CheckerLoad> {
+  checker ??= loadChecker(startWasmChecker);
+  return checker;
+}
+
+/** The checker's runner, or null when it is not (or not yet) available. */
+export async function checkerRunner(): Promise<QueryRunner | null> {
+  const c = await (checker ?? Promise.resolve(null));
+  return c?.ok ? c.runner : null;
 }
 
 /** Runs one read-only learner query. Errors come back as `error`, never thrown. */
 export async function runQuery(sql: string): Promise<RunQueryResult> {
   const guard = guardReadOnly(sql);
   if (!guard.ok) return { columns: [], rows: [], ms: 0, error: guard.error };
-  const sandboxed = await prepareChecker();
-  if ("locked" in sandboxed) return { columns: [], rows: [], ms: 0, error: "The database is not ready yet." };
   const res = await wasmRunner.run(guard.sql);
   return res.error ? { ...res, error: friendlyError(res.error) } : res;
 }

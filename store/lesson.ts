@@ -5,7 +5,7 @@ import type { LessonDefinition } from "@/content/lessons/types";
 import { checkAnswer, diagnose, parseCheck, runtimeError, type CheckReason, type Diagnosis } from "@/engine/check";
 import { buildFilterScene, type FilterScene } from "@/engine/scenes/filter";
 import { friendlyError } from "@/engine/sql-guard";
-import { engineRunner, loadDataset, prepareChecker, type RunQueryResult } from "@/lib/engine/db";
+import { checkerRunner, engineRunner, loadDataset, prepareChecker, type RunQueryResult } from "@/lib/engine/db";
 
 export type Status = "booting" | "preparing-checker" | "ready" | "running" | "error";
 
@@ -79,12 +79,8 @@ export const useLesson = create<LessonState>()((set, get) => ({
       return;
     }
     set({ status: "preparing-checker" });
-    const sandbox = await prepareChecker();
-    if ("locked" in sandbox) {
-      set({ status: "error", fatal: OFFLINE_HELP });
-      return;
-    }
-    set({ checkerReady: sandbox.checker });
+    const loaded = await prepareChecker();
+    set({ checkerReady: loaded.ok });
     if (!get().scene) {
       const { column, operator, threshold } = lesson.animation;
       const scene = await buildFilterScene(engineRunner, { table: lesson.table, column, operator, threshold });
@@ -123,8 +119,9 @@ export const useLesson = create<LessonState>()((set, get) => ({
     }
     // Without the checker, skip straight to running: the guard in checkAnswer
     // still blocks anything but one SELECT, and parse errors come back with a caret.
-    if (get().checkerReady) {
-      const parsed = await parseCheck(sql, engineRunner);
+    const parser = get().checkerReady ? await checkerRunner() : null;
+    if (parser) {
+      const parsed = await parseCheck(sql, parser);
       if (parsed.kind === "runtime") {
         set({ status: "ready", outcome: { kind: "system", message: `The query checker failed: ${parsed.message}` } });
         return get().outcome;

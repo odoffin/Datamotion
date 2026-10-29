@@ -1,83 +1,86 @@
-import type { AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
+import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import type { Field, Table } from "apache-arrow";
+import type { CheckerHandle } from "@/engine/checker-loader";
 import { normalizeValue, type QueryResult, type QueryRunner } from "@/engine/query-runner";
 
-let connection: Promise<AsyncDuckDBConnection> | null = null;
+interface Instance {
+  db: AsyncDuckDB;
+  conn: AsyncDuckDBConnection;
+  worker: Worker;
+}
 
 /**
- * Boots duckdb-wasm once from its jsDelivr bundles inside its own Web Worker,
- * so query work never blocks the main thread. Browser only.
+ * Boots one duckdb-wasm instance from its jsDelivr bundles inside its own Web
+ * Worker, so query work never blocks the main thread. Browser only.
+ */
+async function bootInstance(signal?: AbortSignal): Promise<Instance> {
+  if (typeof window === "undefined") throw new Error("DuckDB can only run in the browser.");
+  const duckdb = await import("@duckdb/duckdb-wasm");
+  const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+  if (!bundle.mainWorker) throw new Error("No DuckDB worker bundle available.");
+  // Cross-origin workers aren't allowed, so bootstrap via a same-origin blob.
+  const workerUrl = URL.createObjectURL(
+    new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" }),
+  );
+  const worker = new Worker(workerUrl);
+  const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
+  // If the worker script or wasm cannot be fetched (offline, blocked CDN),
+  // instantiate() never settles on its own. Fail instead of hanging.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const failed = new Promise<never>((_, reject) => {
+    worker.addEventListener("error", () => reject(new Error("The database worker could not load.")), { once: true });
+    timer = setTimeout(() => reject(new Error("The database took too long to start.")), 30_000);
+  });
+  try {
+    await Promise.race([db.instantiate(bundle.mainModule, bundle.pthreadWorker), failed]);
+  } catch (err) {
+    worker.terminate();
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    URL.revokeObjectURL(workerUrl);
+  }
+  if (signal?.aborted) {
+    worker.terminate();
+    throw new Error("Aborted.");
+  }
+  return { db, conn: await db.connect(), worker };
+}
+
+let main: Promise<AsyncDuckDBConnection> | null = null;
+
+/**
+ * The learner's database. Locked straight away: no reading local files or URLs
+ * (read_csv('https://…') etc.). Nothing here waits for the checker.
  */
 function connect(): Promise<AsyncDuckDBConnection> {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("DuckDB can only run in the browser."));
-  }
-  connection ??= (async () => {
-    const duckdb = await import("@duckdb/duckdb-wasm");
-    const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
-    if (!bundle.mainWorker) throw new Error("No DuckDB worker bundle available.");
-    // Cross-origin workers aren't allowed, so bootstrap via a same-origin blob.
-    const workerUrl = URL.createObjectURL(
-      new Blob([`importScripts("${bundle.mainWorker}");`], {
-        type: "text/javascript",
-      }),
-    );
-    const worker = new Worker(workerUrl);
-    const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
-    // If the worker script or wasm cannot be fetched (offline, blocked CDN),
-    // instantiate() never settles on its own. Fail instead of hanging.
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const failed = new Promise<never>((_, reject) => {
-      worker.addEventListener("error", () => reject(new Error("The database worker could not load.")), { once: true });
-      timer = setTimeout(() => reject(new Error("The database took too long to start.")), 30_000);
-    });
-    try {
-      await Promise.race([db.instantiate(bundle.mainModule, bundle.pthreadWorker), failed]);
-    } catch (err) {
-      worker.terminate();
-      throw err;
-    } finally {
-      clearTimeout(timer);
-      URL.revokeObjectURL(workerUrl);
-    }
-    return db.connect();
+  main ??= (async () => {
+    const { conn } = await bootInstance();
+    await conn.query("SET enable_external_access = false");
+    return conn;
   })();
-  connection.catch(() => {
-    connection = null; // allow a retry after a failed boot
+  main.catch(() => {
+    main = null; // allow a retry after a failed boot
   });
-  return connection;
+  return main;
 }
-
-export interface SandboxStatus {
-  /** json_serialize_sql is available, so syntax can be checked without running. */
-  checker: boolean;
-  error?: string;
-}
-
-let sandbox: Promise<SandboxStatus> | null = null;
 
 /**
- * Loads the json extension (the query checker needs json_serialize_sql), then
- * locks the sandbox: no reading local files or URLs (read_csv('https://…')).
- * The lock is applied even when the extension fails to load, e.g. offline.
- * Runs once; learner queries must await it first.
+ * The query checker: a separate, small instance that only ever parses the
+ * learner's text with json_serialize_sql and never runs it. It lives in its
+ * own worker because duckdb-wasm downloads extensions synchronously inside
+ * the worker; terminating that worker is the only way to cancel a slow
+ * download without stalling the learner's database.
  */
-export function prepareSandbox(): Promise<SandboxStatus> {
-  sandbox ??= (async () => {
-    const conn = await connect();
-    let status: SandboxStatus = { checker: true };
-    try {
-      await conn.query("LOAD json");
-    } catch (err) {
-      status = { checker: false, error: err instanceof Error ? err.message : String(err) };
-    }
-    await conn.query("SET enable_external_access = false");
-    return status;
-  })();
-  sandbox.catch(() => {
-    sandbox = null;
-  });
-  return sandbox;
+export async function startWasmChecker(signal: AbortSignal): Promise<CheckerHandle> {
+  const instance = await bootInstance(signal);
+  const stop = () => instance.worker.terminate();
+  signal.addEventListener("abort", stop, { once: true });
+  await instance.conn.query("LOAD json");
+  if (signal.aborted) throw new Error("Aborted.");
+  // Parsing needs no file or network access either.
+  await instance.conn.query("SET enable_external_access = false");
+  return { runner: runnerFor(() => Promise.resolve(instance.conn)) };
 }
 
 async function arrowCellConverter(field: Field): Promise<(v: unknown) => unknown> {
@@ -109,20 +112,19 @@ async function tableToResult(table: Table, ms: number): Promise<QueryResult> {
   return { columns: fields.map((f) => f.name), rows, ms };
 }
 
-export const wasmRunner: QueryRunner = {
-  async run(sql) {
-    try {
-      const conn = await connect();
-      const start = performance.now();
-      const table = await conn.query(sql);
-      return await tableToResult(table, performance.now() - start);
-    } catch (err) {
-      return {
-        columns: [],
-        rows: [],
-        ms: 0,
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  },
-};
+function runnerFor(getConn: () => Promise<AsyncDuckDBConnection>): QueryRunner {
+  return {
+    async run(sql) {
+      try {
+        const conn = await getConn();
+        const start = performance.now();
+        const table = await conn.query(sql);
+        return await tableToResult(table, performance.now() - start);
+      } catch (err) {
+        return { columns: [], rows: [], ms: 0, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+  };
+}
+
+export const wasmRunner: QueryRunner = runnerFor(connect);
