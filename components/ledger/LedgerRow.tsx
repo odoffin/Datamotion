@@ -20,15 +20,15 @@ export function LedgerRow({ marker, children, verdict = null, className = "", ..
     <div
       data-verdict={verdict ?? undefined}
       className={[
-        "ledger-line grid min-h-[52px] grid-cols-[72px_minmax(0,1fr)_auto] items-center border-b border-rule",
+        "ledger-line grid min-h-11 grid-cols-[72px_minmax(0,1fr)_auto] items-center border-b border-rule",
         verdict === "checking" ? "bg-wash shadow-[inset_4px_0_0_var(--ink)]" : "",
         className,
       ].join(" ")}
       {...props}
     >
       <span className="pl-[18px] font-mono text-sm text-muted">{marker}</span>
-      <div className="min-w-0 py-2 pl-6 pr-3">{children}</div>
-      <span className="min-w-[6.5rem] pr-[18px] text-right text-sm font-semibold">
+      <div className="min-w-0 py-1.5 pl-4 pr-2 sm:pl-6 sm:pr-3">{children}</div>
+      <span className="min-w-[5.75rem] pr-3 text-right text-sm font-semibold sm:min-w-[6.5rem] sm:pr-[18px]">
         {verdict === "kept" && (
           <span className="inline-flex items-center gap-1.5 text-good">
             <Check size={16} strokeWidth={3} aria-hidden />

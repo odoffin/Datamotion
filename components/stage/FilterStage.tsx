@@ -33,13 +33,21 @@ export function filterCountText(scene: FilterScene, stepIndex: number): string {
 }
 
 /** The orders ledger: every row in place, each gets a verdict as the trace plays. */
-export function FilterStage({ scene, stepIndex }: { scene: FilterScene; stepIndex: number }) {
+interface FilterStageProps {
+  scene: FilterScene;
+  stepIndex: number;
+  /** Show every column under each row instead of the compact line. */
+  showDetails: boolean;
+}
+
+export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps) {
   const { table, trace, spec } = scene;
   const states = useMemo(
     () => rowStatesAt(trace, table.rows.map((r) => r.rid), stepIndex),
     [trace, table.rows, stepIndex],
   );
   const focus = table.columns.indexOf(spec.column);
+  const idColumn = table.columns.indexOf("id");
   const list = useRef<HTMLDivElement>(null);
 
   // Keep the rows being checked in view as the trace advances.
@@ -62,25 +70,27 @@ export function FilterStage({ scene, stepIndex }: { scene: FilterScene; stepInde
             key={row.rid}
             role="listitem"
             data-rid={row.rid}
-            marker={i + 1}
+            marker={idColumn >= 0 ? formatCell(row.cells[idColumn]) : i + 1}
             verdict={verdict}
-            className="scroll-mb-48 scroll-mt-4"
+            className="scroll-mt-4 [scroll-margin-bottom:calc(var(--playback-h,0px)+8px)]"
           >
             <p className="flex flex-wrap items-baseline gap-x-3 font-mono">
-              <span className="ledger-struck text-base sm:text-lg">
+              <span className="ledger-struck whitespace-nowrap text-[15px] sm:text-lg">
                 {spec.column} {formatCell(value)}
               </span>
               {atBoundary && <MarginNote className="text-[22px]">exactly {formatNumber(spec.threshold)}</MarginNote>}
             </p>
-            <p className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[13px] text-muted">
-              {table.columns.map((c, ci) =>
-                ci === focus ? null : (
-                  <span key={c}>
-                    {c} {formatCell(row.cells[ci])}
-                  </span>
-                ),
-              )}
-            </p>
+            {showDetails && (
+              <p className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[13px] text-muted">
+                {table.columns.map((c, ci) =>
+                  ci === focus || ci === idColumn ? null : (
+                    <span key={c}>
+                      {c} {formatCell(row.cells[ci])}
+                    </span>
+                  ),
+                )}
+              </p>
+            )}
           </LedgerRow>
         );
       })}

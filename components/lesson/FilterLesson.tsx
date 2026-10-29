@@ -1,7 +1,7 @@
 "use client";
 
 import { LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useId } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button, Disclosure, LedgerSheet, MarginNote, Slip } from "@/components/ledger";
 import { PlaybackBar } from "@/components/PlaybackBar";
 import { ResultTable, resultCountText } from "@/components/ResultTable";
@@ -21,6 +21,20 @@ export function FilterLesson() {
   const reducedMotion = usePrefersReducedMotion();
   const ids = { column: useId(), operator: useId(), threshold: useId(), error: useId() };
   const s = filterLesson.editableSlots;
+  const [showDetails, setShowDetails] = useState(false);
+  const page = useRef<HTMLDivElement>(null);
+  const footer = useRef<HTMLDivElement>(null);
+
+  // Pad the page by the sticky playback footer's height so it never covers the last rows.
+  useEffect(() => {
+    const el = footer.current;
+    if (!el) return;
+    const sync = () => page.current?.style.setProperty("--playback-h", `${el.offsetHeight}px`);
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    sync();
+    return () => ro.disconnect();
+  }, []);
 
   const runAndPlay = useCallback(async () => {
     if (await run()) {
@@ -60,7 +74,10 @@ export function FilterLesson() {
   const busy = status === "booting" || status === "running";
 
   return (
-    <div className="mx-auto flex w-full max-w-[1440px] flex-wrap items-start gap-14 px-4 pb-24 pt-10 sm:px-14 sm:pt-14">
+    <div
+      ref={page}
+      className="mx-auto flex w-full max-w-[1440px] flex-wrap items-start gap-14 px-4 pb-[calc(var(--playback-h,0px)+6rem)] pt-10 sm:px-14 sm:pt-14"
+    >
       {/* Explanation */}
       <section className="min-w-0 max-w-[520px] flex-[1_1_420px]">
         <h1 className="font-serif text-[clamp(2.5rem,6vw,3.75rem)] font-semibold leading-[1.02] tracking-[-0.02em]">
@@ -150,8 +167,13 @@ export function FilterLesson() {
           aria-label="Animation"
           title={filterLesson.table}
           count={scene ? filterCountText(scene, stepIndex) : undefined}
+          actions={
+            <Button variant="line" aria-pressed={showDetails} onClick={() => setShowDetails((v) => !v)}>
+              {showDetails ? "Hide other columns" : "Show other columns"}
+            </Button>
+          }
           footer={
-            <div className="sticky bottom-0 z-[2] border-t-2 border-ink bg-sheet">
+            <div ref={footer} className="sticky bottom-0 z-[2] border-t-2 border-ink bg-sheet">
               <p className="hidden px-5 pt-3 text-sm text-muted sm:block" aria-hidden>
                 {scene ? `Step ${stepIndex + 1} of ${scene.trace.steps.length}` : " "}
               </p>
@@ -163,7 +185,7 @@ export function FilterLesson() {
           }
         >
           {scene ? (
-            <FilterStage scene={scene} stepIndex={stepIndex} />
+            <FilterStage scene={scene} stepIndex={stepIndex} showDetails={showDetails} />
           ) : (
             <p className="py-6 pl-24 pr-5 text-muted">{status === "error" ? error : "Preparing the ledger."}</p>
           )}

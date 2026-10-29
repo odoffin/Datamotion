@@ -4,11 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BRAND_NAME } from "@/lib/brand";
 
-const NAV = [
-  { href: "/chapters", label: "Chapters" },
-  { href: "/review", label: "Review" },
-  { href: "/progress", label: "My progress" },
-] as const;
+// Review and My progress join the nav once those pages exist.
+const NAV = [{ href: "/chapters", label: "Chapters" }] as const;
 
 export function Header() {
   const pathname = usePathname();
