@@ -1,6 +1,7 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import type { Field, Table } from "apache-arrow";
 import type { CheckerHandle } from "@/engine/checker-loader";
+import { preflight } from "@/engine/preflight";
 import { normalizeValue, type QueryResult, type QueryRunner } from "@/engine/query-runner";
 import assets from "./duckdb-assets.json";
 
@@ -30,11 +31,14 @@ async function bootInstance(signal?: AbortSignal): Promise<Instance> {
     eh: { mainModule: url(assets.bundles.eh.module), mainWorker: url(assets.bundles.eh.worker) },
   });
   if (!bundle.mainWorker) throw new Error("No DuckDB worker bundle available.");
+  // Fail fast: a worker whose files cannot load only times out after 30 s.
+  const reachable = await preflight([bundle.mainModule, bundle.mainWorker], (u, init) => fetch(u, init));
+  if (!reachable.ok) throw new Error(`The database files could not be downloaded (${reachable.reason}).`);
   // Same origin, so the worker loads directly (no blob: URL needed under the CSP).
   const worker = new Worker(bundle.mainWorker);
   const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
-  // If the worker script or wasm cannot be fetched (offline, blocked CDN),
-  // instantiate() never settles on its own. Fail instead of hanging.
+  // Backstop: if a download still stalls after the preflight, instantiate()
+  // never settles on its own. Fail instead of hanging.
   let timer: ReturnType<typeof setTimeout> | undefined;
   const failed = new Promise<never>((_, reject) => {
     worker.addEventListener("error", () => reject(new Error("The database worker could not load.")), { once: true });
