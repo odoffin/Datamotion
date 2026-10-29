@@ -1,5 +1,9 @@
+import type { Metadata } from "next";
+import { FilterLesson } from "@/components/lesson/FilterLesson";
+import { filterLesson } from "@/content/lessons/filter";
+
+export const metadata: Metadata = { title: filterLesson.title };
+
 export default function FilterLessonPage() {
-  return (
-    <div className="p-4 text-text-secondary">Filter lesson coming soon.</div>
-  );
+  return <FilterLesson />;
 }
