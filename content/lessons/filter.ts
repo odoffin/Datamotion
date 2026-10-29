@@ -27,5 +27,4 @@ export const filterLesson: LessonDefinition = {
     "Read the slip word by word. Is every keyword spelled right?",
     "Greater than 50 means 50 itself does not count.",
   ],
-  animation: { column: "amount", operator: ">", threshold: 50 },
 };

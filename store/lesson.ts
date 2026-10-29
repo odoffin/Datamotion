@@ -3,7 +3,8 @@ import { datasets } from "@/content/datasets";
 import { datasetIdentifiers } from "@/content/datasets/types";
 import type { LessonDefinition } from "@/content/lessons/types";
 import { checkAnswer, diagnose, parseCheck, runtimeError, type CheckReason, type Diagnosis } from "@/engine/check";
-import { buildFilterScene, type FilterScene } from "@/engine/scenes/filter";
+import type { QueryRunner } from "@/engine/query-runner";
+import { asIdle, buildLearnerScene, checkerOffScene, idleScene, type FilterScene } from "@/engine/scenes/filter";
 import { friendlyError } from "@/engine/sql-guard";
 import { checkerRunner, engineRunner, loadDataset, prepareChecker, type RunQueryResult } from "@/lib/engine/db";
 import { completionFor, nextHintCount, type Completion } from "@/lib/lesson-status";
@@ -40,8 +41,10 @@ interface LessonState {
   answerShown: boolean;
   /** Set on approval: mastered, or revealed if the answer had been shown. */
   completion: Completion | null;
-  /** The ledger for the lesson's table; plays once the answer is approved. */
+  /** The ledger: built from the learner's own last query once one has run. */
   scene: FilterScene | null;
+  /** The table before anything ran (also the base for the checker-off view). */
+  idle: FilterScene | null;
   /** The learner's own rows from DuckDB, whenever their query ran. */
   result: RunQueryResult | null;
   faded: boolean;
@@ -53,6 +56,15 @@ interface LessonState {
   showAnswer: () => void;
   fade: () => void;
   bringBack: () => void;
+}
+
+function sceneOptions(lesson: LessonDefinition, parser: QueryRunner) {
+  return {
+    parser,
+    runner: engineRunner,
+    tables: datasets[lesson.datasetId].tables.map((t) => t.name),
+    fallbackTable: lesson.table,
+  };
 }
 
 const OFFLINE_HELP =
@@ -71,6 +83,7 @@ export const useLesson = create<LessonState>()((set, get) => ({
   answerShown: false,
   completion: null,
   scene: null,
+  idle: null,
   result: null,
   faded: false,
 
@@ -88,6 +101,7 @@ export const useLesson = create<LessonState>()((set, get) => ({
         answerShown: false,
         completion: null,
         scene: null,
+        idle: null,
         result: null,
         faded: false,
       });
@@ -97,17 +111,25 @@ export const useLesson = create<LessonState>()((set, get) => ({
       set({ status: "error", fatal: OFFLINE_HELP });
       return;
     }
+    // Draw the table straight away; the checker may take up to 12 seconds.
+    if (!get().idle) {
+      const plain = await idleScene(engineRunner, lesson.table);
+      if (!plain.ok) {
+        set({ status: "error", fatal: friendlyError(plain.error) });
+        return;
+      }
+      set({ idle: plain.value, scene: plain.value });
+    }
     set({ status: "preparing-checker" });
     const loaded = await prepareChecker();
     set({ checkerReady: loaded.ok });
-    if (!get().scene) {
-      const { column, operator, threshold } = lesson.animation;
-      const scene = await buildFilterScene(engineRunner, { table: lesson.table, column, operator, threshold });
-      if (!scene.ok) {
-        set({ status: "error", fatal: friendlyError(scene.error) });
-        return;
+    // With the checker, focus the idle ledger on the column the goal is about.
+    if (loaded.ok && get().scene?.mode === "idle") {
+      const fromGoal = await buildLearnerScene(lesson.goal.referenceSql, sceneOptions(lesson, loaded.runner));
+      if (fromGoal.ok) {
+        const idle = asIdle(fromGoal.value);
+        set((s) => ({ idle, scene: s.scene?.mode === "idle" ? idle : s.scene }));
       }
-      set({ scene: scene.value });
     }
     set({ status: "ready" });
   },
@@ -161,6 +183,17 @@ export const useLesson = create<LessonState>()((set, get) => ({
       const err = runtimeError(sql, check.learner.error);
       return fail({ kind: "diagnostic", diagnosis: diagnose(sql, err, opts) });
     }
+    // The query ran: animate the learner's own query, right or wrong.
+    const idle = get().idle;
+    let scene: FilterScene | null = idle;
+    if (parser) {
+      const built = await buildLearnerScene(sql, sceneOptions(lesson, parser));
+      scene = built.ok ? built.value : idle;
+    } else if (idle) {
+      scene = checkerOffScene(idle, sql);
+    }
+    set({ scene });
+
     if (!check.ok) return fail({ kind: "wrong", reason: check.reason, hint: check.hint }, check.learner);
 
     const outcome: Outcome = { kind: "approved" };

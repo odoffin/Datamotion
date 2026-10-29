@@ -1,6 +1,5 @@
 import type { DatasetId } from "@/content/datasets";
 import type { LessonGoal } from "@/engine/check";
-import type { FilterOperator } from "@/engine/scenes/filter";
 import type { SceneType } from "@/engine/trace";
 
 export interface LessonDefinition {
@@ -22,9 +21,4 @@ export interface LessonDefinition {
   /** Gentle nudges that never give the answer away, mildest first. */
   hints: string[];
   nextLessonId?: string;
-  /**
-   * The filter the ledger animates once the learner's result is approved.
-   * TODO(step 6): derive this from the learner's own query instead.
-   */
-  animation: { column: string; operator: FilterOperator; threshold: number };
 }

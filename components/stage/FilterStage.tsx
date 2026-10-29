@@ -27,6 +27,7 @@ export function filterCountText(scene: FilterScene, stepIndex: number): string {
     if (v.status === "pass" || v.status === "emitted") kept++;
     if (v.status !== "idle" && v.status !== "checking") checked++;
   }
+  if (scene.mode === "idle" || (scene.mode === "simplified" && !scene.verdicts)) return `${total} rows`;
   if (stepIndex >= trace.steps.length - 1) return `${kept} of ${total} rows kept`;
   if (checked === 0) return `${total} rows`;
   return `${checked} of ${total} checked, ${kept} kept`;
@@ -41,13 +42,17 @@ interface FilterStageProps {
 }
 
 export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps) {
-  const { table, trace, spec } = scene;
+  const { table, trace, boundaryValues } = scene;
   const states = useMemo(
     () => rowStatesAt(trace, table.rows.map((r) => r.rid), stepIndex),
     [trace, table.rows, stepIndex],
   );
-  const focus = table.columns.indexOf(spec.column);
   const idColumn = table.columns.indexOf("id");
+  // The column the learner's condition looks at; otherwise the first one that is not id.
+  const focus = scene.focusColumn
+    ? table.columns.indexOf(scene.focusColumn)
+    : table.columns.findIndex((_, i) => i !== idColumn);
+  const focusName = table.columns[focus] ?? "";
   const list = useRef<HTMLDivElement>(null);
 
   // Keep the rows being checked in view as the trace advances.
@@ -60,11 +65,12 @@ export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps)
   }, [trace, stepIndex]);
 
   return (
-    <div ref={list} role="list" aria-label={`${spec.table} rows`}>
+    <div ref={list} role="list" aria-label={`${table.name} rows`}>
       {table.rows.map((row, i) => {
         const verdict = VERDICT[states.get(row.rid)?.status ?? "idle"];
         const value = row.cells[focus];
-        const atBoundary = value === spec.threshold && (verdict === "kept" || verdict === "dropped");
+        const atBoundary =
+          typeof value === "number" && boundaryValues.includes(value) && (verdict === "kept" || verdict === "dropped");
         return (
           <LedgerRow
             key={row.rid}
@@ -76,9 +82,9 @@ export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps)
           >
             <p className="flex flex-wrap items-baseline gap-x-3 font-mono">
               <span className="ledger-struck whitespace-nowrap text-[15px] sm:text-lg">
-                {spec.column} {formatCell(value)}
+                {focusName} {formatCell(value)}
               </span>
-              {atBoundary && <MarginNote className="hidden text-[22px] sm:inline">exactly {formatNumber(spec.threshold)}</MarginNote>}
+              {atBoundary && <MarginNote className="hidden text-[22px] sm:inline">exactly {formatNumber(value)}</MarginNote>}
             </p>
             {showDetails && (
               <p className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[13px] text-muted">

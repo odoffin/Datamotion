@@ -15,6 +15,7 @@ import { usePlayback } from "@/store/playback";
 import { DiagnosticStrip } from "./DiagnosticStrip";
 import { QueryEditor } from "./QueryEditor";
 import { SchemaCard } from "./SchemaCard";
+import { SqlLine } from "./SqlLine";
 
 export function LessonView({ lesson }: { lesson: LessonDefinition }) {
   const { sql, status, fatal, checkerReady, outcome, attempt, scene, result, faded } = useLesson();
@@ -50,19 +51,23 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
     return () => ro.disconnect();
   }, []);
 
-  // The ledger only plays for an approved answer; anything else leaves it idle.
+  // The ledger plays the learner's own last query; before any run it is idle.
+  const ran = !!scene && scene.mode !== "idle";
   const totalSteps = scene?.trace.steps.length ?? 0;
   useEffect(() => {
-    if (!approved) reset(0, false);
-  }, [approved, reset]);
+    if (!ran) reset(0, false);
+  }, [ran, reset]);
 
   const play = useCallback(() => {
-    reset(totalSteps, !prefersReducedMotion());
+    const steps = useLesson.getState().scene?.trace.steps.length ?? 0;
+    reset(steps, steps > 1 && !prefersReducedMotion());
     ledger.current?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
-  }, [reset, totalSteps]);
+  }, [reset]);
 
   const runQuery = useCallback(async () => {
-    if ((await run()).kind === "approved") play();
+    const result = await run();
+    // Right or wrong, a query that ran gets its own animation.
+    if (result.kind === "approved" || result.kind === "wrong") play();
   }, [run, play]);
 
   // When the slip fades, focus moves to the way back so it is never lost.
@@ -70,7 +75,7 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
     if (faded) bringBackButton.current?.focus();
   }, [faded]);
 
-  const step = approved ? scene?.trace.steps[stepIndex] : undefined;
+  const step = ran ? scene?.trace.steps[stepIndex] : undefined;
   const durationFor = useCallback(
     (i: number) => Math.min(3500, 900 + (scene?.trace.steps[i]?.narration.length ?? 0) * 22),
     [scene],
@@ -252,8 +257,8 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
         <div ref={ledger} className="scroll-mt-4">
           <LedgerSheet
             aria-label="Animation"
-            title={lesson.table}
-            count={scene ? (approved ? filterCountText(scene, stepIndex) : `${scene.table.rows.length} rows`) : undefined}
+            title={scene?.table.name ?? lesson.table}
+            count={scene ? filterCountText(scene, ran ? stepIndex : 0) : undefined}
             actions={
               <Button variant="line" aria-pressed={showDetails} onClick={() => setShowDetails((v) => !v)}>
                 {showDetails ? "Hide other columns" : "Show other columns"}
@@ -262,21 +267,34 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
             footer={
               <div ref={footer} className="sticky bottom-0 z-[2] border-t-2 border-ink bg-sheet">
                 <p className="hidden px-5 pt-3 text-sm text-muted sm:block" aria-hidden>
-                  {approved && scene ? `Step ${stepIndex + 1} of ${totalSteps}` : " "}
+                  {ran ? `Step ${stepIndex + 1} of ${totalSteps}` : "\u00a0"}
                 </p>
                 <p aria-live="polite" data-testid="narration" className="min-h-[1.6em] px-5 pt-3 text-[15px] leading-relaxed sm:pt-0">
-                  {step?.narration ??
-                    (bootLine ??
-                      (outcome.kind === "wrong"
-                        ? "The ledger plays once your rows match the goal."
-                        : "Run your query to see which rows pass the test."))}
+                  {step?.narration ?? bootLine ?? "Run your query to see which rows pass the test."}
                 </p>
                 <PlaybackBar durationFor={durationFor} reducedMotion={reducedMotion} />
               </div>
             }
           >
+            {/* The query being animated, next to the animation. */}
+            <div className="border-b border-rule py-3 pl-24 pr-5">
+              <p className="text-sm text-muted">
+                {!ran ? "No query has run yet." : edited ? "Animating your last run:" : "Animating your query:"}
+              </p>
+              {ran && scene && <SqlLine sql={scene.sql.trim()} />}
+            </div>
+            {scene?.banner && (
+              <p role="status" className="border-b border-rule bg-wash py-3 pl-24 pr-5 text-[15px] font-semibold">
+                {scene.banner}.{" "}
+                <span className="font-normal">
+                  {scene.verdicts
+                    ? "The verdicts below come from running your query; the real result is underneath."
+                    : "Your real result is underneath."}
+                </span>
+              </p>
+            )}
             {scene ? (
-              <FilterStage scene={scene} stepIndex={approved ? stepIndex : 0} showDetails={showDetails} />
+              <FilterStage scene={scene} stepIndex={ran ? stepIndex : 0} showDetails={showDetails} />
             ) : (
               <p className="py-6 pl-24 pr-5 text-muted">{fatal ?? "Preparing the ledger."}</p>
             )}
