@@ -5,9 +5,9 @@ import type { LessonDefinition } from "@/content/lessons/types";
 import { checkAnswer, diagnose, parseCheck, runtimeError, type CheckReason, type Diagnosis } from "@/engine/check";
 import { buildFilterScene, type FilterScene } from "@/engine/scenes/filter";
 import { friendlyError } from "@/engine/sql-guard";
-import { engineRunner, loadDataset, type RunQueryResult } from "@/lib/engine/db";
+import { engineRunner, loadDataset, prepareChecker, type RunQueryResult } from "@/lib/engine/db";
 
-type Status = "booting" | "ready" | "running" | "error";
+export type Status = "booting" | "preparing-checker" | "ready" | "running" | "error";
 
 export type Outcome =
   | { kind: "idle" }
@@ -23,6 +23,11 @@ interface LessonState {
   status: Status;
   /** Boot failure only; query problems live in `outcome`. */
   fatal: string | null;
+  /**
+   * json_serialize_sql loaded. When false (e.g. offline), syntax errors are
+   * found by running the query instead; DuckDB's caret still points at them.
+   */
+  checkerReady: boolean;
   outcome: Outcome;
   /** Counts failed runs, so the shake replays each time. */
   attempt: number;
@@ -39,11 +44,15 @@ interface LessonState {
   bringBack: () => void;
 }
 
+const OFFLINE_HELP =
+  "The database could not start. It downloads from the internet the first time you open a lesson, so check your connection and reload the page.";
+
 export const useLesson = create<LessonState>()((set, get) => ({
   lesson: null,
   sql: "",
   status: "booting",
   fatal: null,
+  checkerReady: false,
   outcome: { kind: "idle" },
   attempt: 0,
   scene: null,
@@ -66,9 +75,16 @@ export const useLesson = create<LessonState>()((set, get) => ({
     }
     const error = await loadDataset(datasets[lesson.datasetId]);
     if (error) {
-      set({ status: "error", fatal: error });
+      set({ status: "error", fatal: OFFLINE_HELP });
       return;
     }
+    set({ status: "preparing-checker" });
+    const sandbox = await prepareChecker();
+    if ("locked" in sandbox) {
+      set({ status: "error", fatal: OFFLINE_HELP });
+      return;
+    }
+    set({ checkerReady: sandbox.checker });
     if (!get().scene) {
       const { column, operator, threshold } = lesson.animation;
       const scene = await buildFilterScene(engineRunner, { table: lesson.table, column, operator, threshold });
@@ -102,12 +118,19 @@ export const useLesson = create<LessonState>()((set, get) => ({
       return outcome;
     };
 
-    const parsed = await parseCheck(sql, engineRunner);
-    if (parsed.kind === "runtime") {
-      set({ status: "ready", outcome: { kind: "system", message: `The query checker failed: ${parsed.message}` } });
-      return get().outcome;
+    if (sql.trim().replace(/;\s*$/, "").trim() === "") {
+      return fail({ kind: "diagnostic", diagnosis: diagnose(sql, { kind: "empty", message: "Write a query on the slip first." }, opts) });
     }
-    if (parsed.kind !== "ok") return fail({ kind: "diagnostic", diagnosis: diagnose(sql, parsed, opts) });
+    // Without the checker, skip straight to running: the guard in checkAnswer
+    // still blocks anything but one SELECT, and parse errors come back with a caret.
+    if (get().checkerReady) {
+      const parsed = await parseCheck(sql, engineRunner);
+      if (parsed.kind === "runtime") {
+        set({ status: "ready", outcome: { kind: "system", message: `The query checker failed: ${parsed.message}` } });
+        return get().outcome;
+      }
+      if (parsed.kind !== "ok") return fail({ kind: "diagnostic", diagnosis: diagnose(sql, parsed, opts) });
+    }
 
     const check = await checkAnswer(sql, lesson, engineRunner);
     if (check.learner.error) {

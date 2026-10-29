@@ -14,7 +14,7 @@ import { DiagnosticStrip } from "./DiagnosticStrip";
 import { QueryEditor } from "./QueryEditor";
 
 export function LessonView({ lesson }: { lesson: LessonDefinition }) {
-  const { sql, status, fatal, outcome, attempt, scene, result, faded } = useLesson();
+  const { sql, status, fatal, checkerReady, outcome, attempt, scene, result, faded } = useLesson();
   const { setSql, startOver, run, fade, bringBack, open } = useLesson();
   const { stepIndex, reset } = usePlayback();
   const reducedMotion = usePrefersReducedMotion();
@@ -66,7 +66,13 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
     (i: number) => Math.min(3500, 900 + (scene?.trace.steps[i]?.narration.length ?? 0) * 22),
     [scene],
   );
-  const busy = status === "booting" || status === "running";
+  const busy = status === "booting" || status === "preparing-checker" || status === "running";
+  const bootLine =
+    status === "booting"
+      ? "Starting the database. It downloads once, the first time you open a lesson."
+      : status === "preparing-checker"
+        ? "Preparing the checker, so it can point at mistakes."
+        : null;
 
   return (
     <div
@@ -103,7 +109,14 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
             <QueryEditor value={sql} onChange={setSql} onRun={() => void runQuery()} label="SQL query" describedBy={`${ids.slip} ${ids.keys}`} />
           </div>
           <p id={ids.keys} className="mt-2 text-sm text-muted">
-            Enter runs the query. Shift+Enter starts a new line.
+            Enter runs the query. Shift+Enter starts a new line. Escape, then Tab, leaves the slip.
+          </p>
+          <p role="status" className="mt-2 flex items-center gap-2 text-sm text-ink empty:mt-0">
+            {bootLine && <LoaderCircle size={14} className="animate-spin motion-reduce:animate-none" aria-hidden />}
+            {bootLine ??
+              (status === "ready" && !checkerReady
+                ? "The checker could not load, so mistakes are found by running the query. Everything else works."
+                : null)}
           </p>
 
           {outcome.kind === "diagnostic" && <DiagnosticStrip diagnosis={outcome.diagnosis} attempt={attempt} />}
@@ -138,7 +151,13 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
             <div className="mt-6 flex flex-wrap gap-3">
               <Button onClick={() => void runQuery()} disabled={status !== "ready"}>
                 {busy && <LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden />}
-                {status === "booting" ? "Starting the database" : status === "running" ? "Running" : "Run the query"}
+                {status === "booting"
+                  ? "Starting the database"
+                  : status === "preparing-checker"
+                    ? "Preparing the checker"
+                    : status === "running"
+                      ? "Running"
+                      : "Run the query"}
               </Button>
               <Button variant="line" onClick={startOver} disabled={busy}>
                 Start over
@@ -183,11 +202,10 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
                 </p>
                 <p aria-live="polite" data-testid="narration" className="min-h-[1.6em] px-5 pt-3 text-[15px] leading-relaxed sm:pt-0">
                   {step?.narration ??
-                    (status === "booting"
-                      ? "Starting the database. This takes a moment the first time."
-                      : outcome.kind === "wrong"
+                    (bootLine ??
+                      (outcome.kind === "wrong"
                         ? "The ledger plays once your rows match the goal."
-                        : "Run your query to see which rows pass the test.")}
+                        : "Run your query to see which rows pass the test."))}
                 </p>
                 <PlaybackBar durationFor={durationFor} reducedMotion={reducedMotion} />
               </div>

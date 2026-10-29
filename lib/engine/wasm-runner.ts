@@ -24,20 +24,60 @@ function connect(): Promise<AsyncDuckDBConnection> {
     );
     const worker = new Worker(workerUrl);
     const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
-    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-    URL.revokeObjectURL(workerUrl);
-    const conn = await db.connect();
-    // The query checker needs json_serialize_sql, which lives in the json
-    // extension. Load it while downloads are still allowed.
-    await conn.query("LOAD json");
-    // Sandbox: no reading local files or URLs (read_csv('https://…') etc.).
-    await conn.query("SET enable_external_access = false");
-    return conn;
+    // If the worker script or wasm cannot be fetched (offline, blocked CDN),
+    // instantiate() never settles on its own. Fail instead of hanging.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const failed = new Promise<never>((_, reject) => {
+      worker.addEventListener("error", () => reject(new Error("The database worker could not load.")), { once: true });
+      timer = setTimeout(() => reject(new Error("The database took too long to start.")), 30_000);
+    });
+    try {
+      await Promise.race([db.instantiate(bundle.mainModule, bundle.pthreadWorker), failed]);
+    } catch (err) {
+      worker.terminate();
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      URL.revokeObjectURL(workerUrl);
+    }
+    return db.connect();
   })();
   connection.catch(() => {
     connection = null; // allow a retry after a failed boot
   });
   return connection;
+}
+
+export interface SandboxStatus {
+  /** json_serialize_sql is available, so syntax can be checked without running. */
+  checker: boolean;
+  error?: string;
+}
+
+let sandbox: Promise<SandboxStatus> | null = null;
+
+/**
+ * Loads the json extension (the query checker needs json_serialize_sql), then
+ * locks the sandbox: no reading local files or URLs (read_csv('https://…')).
+ * The lock is applied even when the extension fails to load, e.g. offline.
+ * Runs once; learner queries must await it first.
+ */
+export function prepareSandbox(): Promise<SandboxStatus> {
+  sandbox ??= (async () => {
+    const conn = await connect();
+    let status: SandboxStatus = { checker: true };
+    try {
+      await conn.query("LOAD json");
+    } catch (err) {
+      status = { checker: false, error: err instanceof Error ? err.message : String(err) };
+    }
+    await conn.query("SET enable_external_access = false");
+    return status;
+  })();
+  sandbox.catch(() => {
+    sandbox = null;
+  });
+  return sandbox;
 }
 
 async function arrowCellConverter(field: Field): Promise<(v: unknown) => unknown> {

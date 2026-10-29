@@ -198,3 +198,105 @@ describe("checkAnswer", () => {
     expect(await checkAnswer("SELECT * FORM orders", filterLesson, runner)).toMatchObject({ ok: false, reason: "error" });
   });
 });
+
+describe("pointing rule order", () => {
+  const pos = (sql: string, word: string) => sql.indexOf(word);
+  const at = (sql: string, i: number) => (i === -1 ? "<all>" : (lex(sql)[i]?.text ?? "<end>"));
+
+  it("0: an unterminated quote wins over everything", () => {
+    const sql = "SELECT * FORM orders WHERE city = 'Lagos";
+    const err: SqlError = { kind: "runtime", message: 'syntax error at or near "orders"', position: pos(sql, "orders") };
+    expect(at(sql, locateErrorToken(sql, err, { referenceSql: ref, identifiers }))).toBe("'Lagos");
+  });
+
+  it("1: a single edit from the reference beats DuckDB's position", () => {
+    const sql = "SELECT * FROM orders WHERE amout > 50";
+    // DuckDB pointing somewhere else entirely must not win over the one-edit diff.
+    const err: SqlError = { kind: "runtime", message: "x", position: pos(sql, "50") };
+    expect(at(sql, locateErrorToken(sql, err, { referenceSql: ref, identifiers }))).toBe("amout");
+  });
+
+  it("1 only applies to a single edit: two edits fall through to the position", () => {
+    const sql = "SELECT * FROM orders WHERE amout >= 50";
+    const err: SqlError = { kind: "runtime", message: "x", position: pos(sql, "amout") };
+    expect(at(sql, locateErrorToken(sql, err, { referenceSql: ref, identifiers }))).toBe("amout");
+    const err2: SqlError = { kind: "runtime", message: "x", position: pos(sql, ">=") };
+    expect(at(sql, locateErrorToken(sql, err2, { referenceSql: ref, identifiers }))).toBe(">=");
+  });
+
+  it("a: the position is nudged back onto a misspelt keyword before it", () => {
+    const sql = "SELECT * FORM orders";
+    const err: SqlError = { kind: "syntax", message: "x", position: pos(sql, "orders") };
+    expect(at(sql, locateErrorToken(sql, err, { identifiers }))).toBe("FORM");
+  });
+
+  it("a: the token at the position itself can be the misspelt keyword", () => {
+    const sql = "SELEC * FROM orders";
+    const err: SqlError = { kind: "syntax", message: "x", position: 0 };
+    expect(at(sql, locateErrorToken(sql, err, { identifiers }))).toBe("SELEC");
+  });
+
+  it("a: table names are never mistaken for keyword typos (orders is not ORDER)", () => {
+    const sql = "SELECT id FROM orders 5";
+    const err: SqlError = { kind: "syntax", message: "x", position: pos(sql, "5") };
+    expect(at(sql, locateErrorToken(sql, err, { identifiers }))).toBe("5");
+    // Without the identifier list, "orders" would look like a typo of ORDER.
+    expect(at(sql, locateErrorToken(sql, err))).toBe("orders");
+  });
+
+  it("a beats b: the position wins over a quoted name in the message", () => {
+    const sql = "SELECT amount FROM orders WHERE id > 5";
+    const err: SqlError = { kind: "runtime", message: 'column "amount" is odd', position: pos(sql, "id") };
+    expect(at(sql, locateErrorToken(sql, err, { identifiers }))).toBe("id");
+  });
+
+  it("b: with no position, a quoted name in the message is used", () => {
+    const sql = "SELECT amount FROM orders WHERE id > 5";
+    const err: SqlError = { kind: "runtime", message: 'column "amount" is odd' };
+    expect(at(sql, locateErrorToken(sql, err, { identifiers }))).toBe("amount");
+  });
+
+  it("b beats c: the quoted name wins over a multi-edit diff", () => {
+    const sql = "SELECT id FROM orders WHERE amount >= 10";
+    const err: SqlError = { kind: "runtime", message: 'something about "amount"' };
+    expect(at(sql, locateErrorToken(sql, err, { referenceSql: ref, identifiers }))).toBe("amount");
+  });
+
+  it("c: with no position or name, the first token that differs from the reference", () => {
+    const sql = "SELECT id FROM orders WHERE amount >= 10";
+    const err: SqlError = { kind: "runtime", message: "no clue" };
+    expect(at(sql, locateErrorToken(sql, err, { referenceSql: ref, identifiers }))).toBe("id");
+  });
+
+  it("d: nothing to go on circles the whole statement", () => {
+    const sql = "SELECT id FROM orders";
+    expect(locateErrorToken(sql, { kind: "runtime", message: "no clue" }, { identifiers })).toBe(-1);
+  });
+});
+
+describe("without the checker (json extension unavailable)", () => {
+  // The lesson then skips parseCheck and runs the query; the parser error comes
+  // back as a runtime error with DuckDB's caret, so pointing still works.
+  it.each([
+    ["SELECT * FORM orders WHERE amount > 50", "FORM", "expected FROM"],
+    ["select * form orders where 50 < amount", "form", "expected FROM"],
+    ["SELECT * FROM orders WHERE amount > 50 lol", "lol", "nothing more needed here"],
+  ])("%s", async (sql, word, note) => {
+    const res = await runner.run(sql);
+    expect(res.error).toBeTruthy();
+    const err = runtimeError(sql, res.error ?? "");
+    expect(err.position).toBeTypeOf("number");
+    const d = diagnose(sql, err, { referenceSql: ref, identifiers });
+    expect(d.tokens[d.index]?.text).toBe(word);
+    expect(d.note).toBe(note);
+  });
+
+  it("an unclosed quote rejected by the guard is still circled", async () => {
+    const sql = "SELECT * FROM customers WHERE city = 'Lagos";
+    const r = await checkAnswer(sql, filterLesson, runner);
+    expect(r.ok).toBe(false);
+    const d = diagnose(sql, runtimeError(sql, r.learner.error ?? ""), { referenceSql: ref, identifiers });
+    expect(d.tokens[d.index]?.text).toBe("'Lagos");
+    expect(d.note).toBe("close this quote");
+  });
+});

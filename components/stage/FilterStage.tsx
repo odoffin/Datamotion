@@ -78,7 +78,7 @@ export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps)
               <span className="ledger-struck whitespace-nowrap text-[15px] sm:text-lg">
                 {spec.column} {formatCell(value)}
               </span>
-              {atBoundary && <MarginNote className="text-[22px]">exactly {formatNumber(spec.threshold)}</MarginNote>}
+              {atBoundary && <MarginNote className="hidden text-[22px] sm:inline">exactly {formatNumber(spec.threshold)}</MarginNote>}
             </p>
             {showDetails && (
               <p className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[13px] text-muted">

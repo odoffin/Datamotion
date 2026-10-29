@@ -117,14 +117,21 @@ export interface LocateOptions {
  * Picks the token to circle. Returns an index into lex(sql); tokens.length
  * means "something is missing at the end"; -1 means "the whole statement".
  *
- * Order: a query one edit away from the reference wins outright (it is
- * unambiguous, and DuckDB's parser often flags the word after the mistake);
- * then (a) the token at DuckDB's position, nudged back onto a misspelt
- * keyword; (b) a quoted name in the error; (c) the first token that differs
- * from the reference; (d) none.
+ * Order:
+ *  0. an unterminated quote (unambiguous, and the guard can reject it before
+ *     DuckDB reports any position);
+ *  1. a query one edit away from the reference (unambiguous, and DuckDB's
+ *     parser often flags the word after the mistake);
+ *  a. the token at DuckDB's position, nudged back onto a misspelt keyword
+ *     (table and column names are never treated as keyword typos);
+ *  b. a quoted name in the error message;
+ *  c. the first token that differs from the reference;
+ *  d. none: -1, the whole statement.
  */
 export function locateErrorToken(sql: string, error: SqlError, opts: LocateOptions = {}): number {
   const tokens = lex(sql);
+  const open = tokens.findIndex((t) => t.unterminated);
+  if (open >= 0) return open;
   const ids = new Set((opts.identifiers ?? []).map((s) => s.toLowerCase()));
   const alignment = opts.referenceSql ? align(tokens, lex(opts.referenceSql)) : null;
 
