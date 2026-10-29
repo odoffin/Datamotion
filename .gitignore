@@ -43,3 +43,6 @@ next-env.d.ts
 # merged from pre-existing .gitignore
 .env*.local
 !.env.example
+
+# third-party agent skills (not ours to redistribute)
+.claude/skills/

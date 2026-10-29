@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ledger: filtering rows with WHERE</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Caveat:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F3EDE0;--sheet:#FBF8F1;--ink:#1D1B16;--muted:#625D50;--rule:#D9D1BC;--margin:#D98B83;--good:#2B6648;--key:#1F4E79;--num:#8A5A00;--serif:'Fraunces',Georgia,serif;--mono:'IBM Plex Mono',monospace;--hand:'Caveat',cursive;--sans:'Inter',system-ui,sans-serif}
+body{margin:0;background:var(--paper)}
+*{box-sizing:border-box}
+button{font-family:var(--sans);cursor:pointer}
+a{color:var(--muted);text-decoration:none}
+a:hover{color:var(--ink);text-decoration:underline}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+@keyframes shakeA{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+@keyframes shakeB{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.tokA{animation:shakeA .45s ease-in-out}
+.tokB{animation:shakeB .45s ease-in-out}
+.rise{animation:rise .7s ease both}
+.tk{color:var(--key);font-weight:500}.ti{color:var(--ink)}.tn{color:var(--num)}.to{color:var(--ink)}
+.bad{color:var(--pen);outline:2px solid var(--pen);outline-offset:5px;border-radius:50%}
+.tip{position:absolute;left:0;top:100%;margin-top:18px;white-space:nowrap;font-family:var(--hand);font-size:24px;line-height:1;color:var(--pen)}
+.slip{transition:opacity .9s ease,filter .9s ease,transform .9s ease,max-height .9s ease,visibility 0s linear 0s;max-height:900px}
+.slip.gone{opacity:0;filter:blur(8px);transform:translateY(-10px);max-height:0;overflow:hidden;visibility:hidden;pointer-events:none;transition:opacity .9s ease,filter .9s ease,transform .9s ease,max-height .9s ease,visibility 0s linear .9s}
+.line{transition:opacity .6s ease,transform .6s ease}
+.line.dropped{opacity:.55;transform:translateX(8px)}
+.line.dropped .amt{text-decoration:line-through;text-decoration-color:var(--pen);text-decoration-thickness:2px}
+.btn{min-height:44px;padding:0 22px;border-radius:2px;font-size:15px;font-weight:600}
+.btn-solid{background:var(--ink);color:var(--sheet);border:1px solid var(--ink)}
+.btn-solid:hover{background:#000}
+.btn-line{background:transparent;color:var(--ink);border:1px solid var(--ink)}
+.btn-line:hover{background:var(--ink);color:var(--sheet)}
+@media (prefers-reduced-motion: reduce){.tokA,.tokB,.rise{animation:none}.slip,.line{transition:none}}
+</style>
+</helmet>
+
+<div style="--pen: {{ accent }}; min-height: 1240px; background: var(--paper); color: var(--ink); font-family: var(--sans)">
+
+<header style="display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: space-between; padding: 28px 56px 0">
+<span style="font-family: var(--serif); font-style: italic; font-weight: 600; font-size: 26px">Datamotion</span>
+<nav style="display: flex; flex-wrap: wrap; gap: 28px; font-size: 15px">
+<a href="#">Chapters</a>
+<a href="#">Review</a>
+<a href="#">My progress</a>
+</nav>
+</header>
+
+<main style="display: flex; flex-wrap: wrap; gap: 56px; padding: 56px 56px 96px; max-width: 1440px; margin: 0 auto; align-items: flex-start">
+
+<section style="flex: 1 1 420px; min-width: 0; max-width: 520px">
+<p style="margin: 0; font-size: 15px; color: var(--muted)">Filtering, lesson 3 of 8</p>
+<h1 style="margin: 14px 0 0; font-family: var(--serif); font-weight: 600; font-size: 60px; line-height: 1.02; letter-spacing: -0.02em">Keep only the rows that pass the test.</h1>
+<p style="margin: 22px 0 0; font-size: 18px; line-height: 1.6; color: var(--ink)">WHERE is a rule the database checks against every row. Rows that pass stay in the result. Rows that fail leave it. The table itself never changes.</p>
+
+<button class="btn btn-line" onClick="{{ toggleOpen }}" style="margin-top: 24px">{{ openLabel }}</button>
+
+<sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+<div class="rise" style="margin-top: 24px; padding-left: 20px; border-left: 2px solid var(--ink); font-size: 16px; line-height: 1.7; color: var(--ink)">
+<p style="margin: 0">Read the query in the order the database does. <code style="font-family: var(--mono); font-size: 14px">FROM orders</code> picks the table. <code style="font-family: var(--mono); font-size: 14px">WHERE amount &gt; 50</code> is then asked of one row at a time: is this amount greater than 50? Only a yes keeps the row. <code style="font-family: var(--mono); font-size: 14px">SELECT *</code> comes last and decides which columns you see.</p>
+<p style="margin: 14px 0 0">The boundary matters. The symbol &gt; means strictly greater than, so an amount of exactly 50 is dropped. Swap in &gt;= and it stays. Off by one mistakes like this return the wrong rows without any error message, which is why they are so common.</p>
+<p style="margin: 14px 0 0">Watch the ledger on the right as you run the query. Every row gets a verdict, and you can see which rows the rule removed and why.</p>
+</div>
+</sc-if>
+
+<p style="margin: 32px 0 0; font-size: 16px; line-height: 1.6"><strong>Your turn.</strong> The query on the slip has a typo. Run it, follow the red pen to the word that is wrong, fix it and run again.</p>
+</section>
+
+<section style="flex: 1.4 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 32px">
+
+<div class="slip {{ cardCls }}">
+<div style="background: var(--sheet); border: 1px solid var(--ink); padding: 26px 28px 30px; box-shadow: 6px 6px 0 var(--ink)">
+<p style="margin: 0; font-size: 14px; color: var(--muted)">Request slip. Type your query below.</p>
+<input type="text" value="{{ code }}" onInput="{{ onType }}" onKeyDown="{{ onKeyDown }}" aria-label="SQL query" spellcheck="false" autocomplete="off" style="display: block; width: 100%; margin-top: 12px; height: 56px; padding: 0 14px; background: transparent; border: 0; border-bottom: 2px solid var(--ink); color: var(--ink); font-family: var(--mono); font-size: 21px">
+
+<sc-if value="{{ showDiag }}" hint-placeholder-val="{{ false }}">
+<div role="alert" style="margin-top: 26px; padding: 8px 0 60px; font-family: var(--mono); font-size: 21px; line-height: 1.4">
+<sc-for list="{{ tokens }}" as="t" hint-placeholder-count="8">
+<span class="{{ t.cls }}" style="position: relative; display: inline-block; margin-right: 14px; padding: 0 4px">{{ t.text }}<sc-if value="{{ t.bad }}" hint-placeholder-val="{{ false }}"><span class="tip">{{ t.label }}</span></sc-if></span>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 16px; line-height: 1.6">{{ message }}</p>
+<p style="margin: 6px 0 0; font-size: 15px; line-height: 1.6; color: var(--muted)">{{ hint }}</p>
+</sc-if>
+
+<sc-if value="{{ isSuccess }}" hint-placeholder-val="{{ false }}">
+<div role="status" style="margin-top: 24px">
+<p style="margin: 0; font-family: var(--serif); font-size: 24px; font-weight: 600; color: var(--good)">Approved. The ledger below shows what survived.</p>
+<p style="margin: 10px 0 0; font-size: 16px; line-height: 1.6">When you feel sure of WHERE, the slip fades away and you move on. It comes back later as a review.</p>
+<div style="margin-top: 18px; display: flex; flex-wrap: wrap; gap: 12px">
+<button class="btn btn-solid" onClick="{{ gotIt }}">I've got it, fade the code</button>
+<button class="btn btn-line" onClick="{{ replay }}">Show me once more</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ notSuccess }}" hint-placeholder-val="{{ true }}">
+<div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px">
+<button class="btn btn-solid" onClick="{{ run }}">Run the query</button>
+<button class="btn btn-line" onClick="{{ reset }}">Start over</button>
+</div>
+</sc-if>
+</div>
+</div>
+
+<sc-if value="{{ isFaded }}" hint-placeholder-val="{{ false }}">
+<div class="rise" style="background: var(--sheet); border: 1px solid var(--ink); padding: 28px; box-shadow: 6px 6px 0 var(--ink)">
+<p style="margin: 0; font-size: 15px; color: var(--muted)">Lesson 3 is done. It returns for review tomorrow.</p>
+<h2 style="margin: 10px 0 0; font-family: var(--serif); font-weight: 600; font-size: 34px; letter-spacing: -0.01em">Next: put your rows in order with ORDER BY.</h2>
+<div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 12px">
+<button class="btn btn-solid">Start lesson 4</button>
+<button class="btn btn-line" onClick="{{ bringBack }}">Bring my code back</button>
+</div>
+</div>
+</sc-if>
+
+<div style="background: var(--sheet); border: 1px solid var(--ink)">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 16px 20px 12px 96px; border-bottom: 2px solid var(--ink); font-size: 15px">
+<span style="font-family: var(--serif); font-weight: 600; font-size: 20px">orders</span>
+<span style="color: var(--muted)">{{ countText }}</span>
+</div>
+<div style="position: relative">
+<div style="position: absolute; left: 72px; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--margin)" aria-hidden="true"></div>
+<sc-for list="{{ rows }}" as="r" hint-placeholder-count="7">
+<div class="line {{ r.cls }}" style="display: grid; grid-template-columns: 72px 1fr 140px; align-items: center; min-height: 52px; border-bottom: 1px solid var(--rule)">
+<span style="padding-left: 18px; font-family: var(--mono); font-size: 14px; color: var(--muted)">{{ r.id }}</span>
+<span class="amt" style="padding-left: 24px; font-family: var(--mono); font-size: 18px">amount {{ r.amount }}</span>
+<span style="padding-right: 18px; text-align: right; font-size: 14px; font-weight: 600">
+<sc-if value="{{ r.kept }}" hint-placeholder-val="{{ false }}"><span style="color: var(--good)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align: -2px; margin-right: 6px"><path d="M5 12l5 5 9-10"></path></svg>kept</span></sc-if>
+<sc-if value="{{ r.dropped }}" hint-placeholder-val="{{ false }}"><span style="color: var(--pen)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align: -2px; margin-right: 6px"><path d="M6 6l12 12M18 6L6 18"></path></svg>dropped</span></sc-if>
+</span>
+</div>
+</sc-for>
+</div>
+<p aria-live="polite" style="margin: 0; padding: 16px 20px 18px 96px; font-size: 15px; line-height: 1.6">{{ narration }}</p>
+</div>
+
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#C2362B","options":["#C2362B","#1F4E79","#2B6648","#8A5A00"]},"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  state = { code: 'SELECT * FORM orders WHERE amount > 50', status: 'idle', attempt: 0, faded: false, open: false, errIndex: -1 };
+  expected = ['select', '*', 'from', 'orders', 'where', 'amount', '>', '50'];
+  shown = ['SELECT', '*', 'FROM', 'orders', 'WHERE', 'amount', '>', '50'];
+  hints = { 'select': 'Every query starts with SELECT. It says which columns to show.', '*': 'The star means all columns.', 'from': 'FROM names the table to read. Check the spelling letter by letter.', 'orders': 'The table in this lesson is called orders.', 'where': 'WHERE keeps only the rows that pass a test.', 'amount': 'The column we are testing is called amount.', '>': 'The comparison symbol is greater than: >', '50': 'The threshold is the number 50.' };
+  tokenize(code) { return (code.match(/[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[<>=!]+|\*|;|\S/g) || []).filter((t) => t !== ';'); }
+  evaluate(code) {
+    const toks = this.tokenize(code);
+    for (let i = 0; i < this.expected.length; i++) {
+      if (i >= toks.length) return { ok: false, idx: i, kind: 'missing', toks };
+      if (toks[i].toLowerCase() !== this.expected[i]) return { ok: false, idx: i, kind: 'wrong', toks };
+    }
+    if (toks.length > this.expected.length) return { ok: false, idx: this.expected.length, kind: 'extra', toks };
+    return { ok: true, idx: -1, kind: '', toks };
+  }
+  renderVals() {
+    const s = this.state;
+    const isSuccess = s.status === 'success';
+    const isError = s.status === 'error';
+    const start = 'SELECT * FORM orders WHERE amount > 50';
+    const run = () => { const r = this.evaluate(this.state.code); if (r.ok) this.setState({ status: 'success' }); else this.setState({ status: 'error', attempt: this.state.attempt + 1 }); };
+    const kw = ['select', 'from', 'where'];
+    let tokens = [], message = '', hint = '';
+    if (isError) {
+      const r = this.evaluate(s.code);
+      const exp = this.shown[r.idx];
+      const anim = s.attempt % 2 === 0 ? 'tokA' : 'tokB';
+      tokens = r.toks.map((t, i) => {
+        const bad = i === r.idx && r.kind !== 'missing';
+        const low = t.toLowerCase();
+        let c = 'to';
+        if (kw.indexOf(low) >= 0) c = 'tk'; else if (/^\d/.test(t)) c = 'tn'; else if (/^[A-Za-z_]/.test(t)) c = 'ti';
+        return { text: t, bad: bad, label: bad ? (r.kind === 'extra' ? 'nothing more needed here' : 'expected ' + exp) : '', cls: bad ? c + ' bad ' + anim : c };
+      });
+      if (r.kind === 'missing') {
+        tokens.push({ text: '…', bad: true, label: 'expected ' + exp + ' next', cls: 'bad ' + anim });
+        message = 'The query stops early. Word ' + (r.idx + 1) + ' should be "' + exp + '".';
+      } else if (r.kind === 'extra') {
+        message = 'There is extra text after the end of the query: "' + r.toks[r.idx] + '".';
+      } else {
+        message = 'Word ' + (r.idx + 1) + ' should be "' + exp + '", but you typed "' + r.toks[r.idx] + '".';
+      }
+      hint = r.kind === 'extra' ? 'Delete everything after 50 and run again.' : this.hints[this.expected[r.idx]];
+    }
+    const amounts = [120, 50, 35, 80, 50, 200, 15];
+    let kept = 0;
+    const rows = amounts.map((a, i) => {
+      const k = isSuccess && a > 50, d = isSuccess && a <= 50;
+      if (k) kept++;
+      return { id: i + 1, amount: a, kept: k, dropped: d, cls: d ? 'dropped' : '', w: Math.round(a / 2) + '%' };
+    });
+    return {
+      accent: this.props.accent ?? '#C2362B',
+      code: s.code,
+      onType: (e) => this.setState({ code: e.target.value, status: 'idle' }),
+      onKeyDown: (e) => { if (e.key === 'Enter') run(); },
+      run: run,
+      reset: () => this.setState({ code: start, status: 'idle' }),
+      replay: () => this.setState({ status: 'idle' }),
+      gotIt: () => this.setState({ faded: true }),
+      bringBack: () => this.setState({ faded: false, status: 'idle' }),
+      toggleOpen: () => this.setState({ open: !this.state.open }),
+      open: s.open,
+      openLabel: s.open ? 'Hide the long version' : 'Read the long version',
+      showDiag: isError, isSuccess: isSuccess, notSuccess: !isSuccess,
+      isFaded: s.faded, cardCls: s.faded ? 'gone' : '',
+      tokens: tokens, message: message, hint: hint, rows: rows,
+      countText: isSuccess ? kept + ' of 7 rows kept' : '7 rows',
+      narration: isSuccess ? 'Orders 2 and 5 are exactly 50, and 50 is not greater than 50, so both were dropped, along with orders 3 and 7.' : 'Run your query to see which rows pass the test.'
+    };
+  }
+}
+</script>
+</body>
+</html>

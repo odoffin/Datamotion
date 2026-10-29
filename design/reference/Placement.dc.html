@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Placement quiz: where should I start?</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Caveat:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F3EDE0;--sheet:#FBF8F1;--ink:#1D1B16;--muted:#625D50;--rule:#D9D1BC;--margin:#D98B83;--good:#2B6648;--serif:'Fraunces',Georgia,serif;--mono:'IBM Plex Mono',monospace;--hand:'Caveat',cursive;--sans:'Inter',system-ui,sans-serif}
+body{margin:0;background:var(--paper)}
+*{box-sizing:border-box}
+button{font-family:var(--sans);cursor:pointer}
+a{color:var(--muted);text-decoration:none}
+a:hover{color:var(--ink);text-decoration:underline}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.rise{animation:rise .5s ease both}
+.btn{min-height:44px;padding:0 22px;border-radius:2px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;text-decoration:none}
+.btn-solid{background:var(--ink);color:var(--sheet);border:1px solid var(--ink)}
+.btn-solid:hover{background:#000;color:var(--sheet);text-decoration:none}
+.btn-line{background:transparent;color:var(--ink);border:1px solid var(--ink)}
+.btn-line:hover{background:var(--ink);color:var(--sheet);text-decoration:none}
+.opt{display:grid;grid-template-columns:72px 1fr 120px;align-items:center;width:100%;min-height:64px;padding:8px 0;background:transparent;border:0;border-bottom:1px solid var(--rule);text-align:left;color:var(--ink);font-size:17px;line-height:1.45}
+.opt:hover{background:rgba(29,27,22,0.05)}
+.opt:disabled{cursor:default}
+.opt:disabled:hover{background:transparent}
+.opt.right{background:rgba(43,102,72,0.10)}
+.opt.wrong{background:rgba(194,54,43,0.10)}
+.hand{font-family:var(--hand);font-size:26px;line-height:1;color:var(--pen)}
+@media (prefers-reduced-motion: reduce){.rise{animation:none}}
+</style>
+</helmet>
+
+<div style="--pen: {{ accent }}; min-height: 1120px; background: var(--paper); color: var(--ink); font-family: var(--sans)">
+
+<header style="display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: space-between; padding: 28px 56px 0">
+<span style="font-family: var(--serif); font-style: italic; font-weight: 600; font-size: 26px">Datamotion</span>
+<nav style="display: flex; flex-wrap: wrap; gap: 28px; font-size: 15px">
+<a href="Map.dc.html">Back to the chapter map</a>
+</nav>
+</header>
+
+<main style="padding: 56px 56px 96px; max-width: 920px; margin: 0 auto">
+
+<sc-if value="{{ inQuiz }}" hint-placeholder-val="{{ true }}">
+<section>
+<p style="margin: 0; font-size: 15px; color: var(--muted)">Question {{ num }} of 6. Answer honestly, there is no penalty.</p>
+<h1 style="margin: 12px 0 0; font-family: var(--serif); font-weight: 600; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em">{{ q.prompt }}</h1>
+
+<div style="margin-top: 32px; background: var(--sheet); border: 1px solid var(--ink)">
+<div style="position: relative">
+<div style="position: absolute; left: 72px; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--margin)" aria-hidden="true"></div>
+<sc-for list="{{ options }}" as="o" hint-placeholder-count="4">
+<button class="opt {{ o.cls }}" onClick="{{ o.pick }}" disabled="{{ o.locked }}">
+<span style="padding-left: 18px; font-family: var(--mono); font-size: 15px; color: var(--muted)">{{ o.letter }}</span>
+<span style="padding: 0 16px 0 24px; display: block; {{ o.font }}">{{ o.text }}</span>
+<span style="padding-right: 18px; text-align: right; font-size: 14px; font-weight: 600">
+<sc-if value="{{ o.isRight }}" hint-placeholder-val="{{ false }}"><span style="color: var(--good)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align: -2px; margin-right: 6px"><path d="M5 12l5 5 9-10"></path></svg>correct</span></sc-if>
+<sc-if value="{{ o.isWrong }}" hint-placeholder-val="{{ false }}"><span style="color: var(--pen)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align: -2px; margin-right: 6px"><path d="M6 6l12 12M18 6L6 18"></path></svg>not quite</span></sc-if>
+</span>
+</button>
+</sc-for>
+</div>
+</div>
+
+<sc-if value="{{ answered }}" hint-placeholder-val="{{ false }}">
+<div class="rise" role="status" style="margin-top: 24px">
+<p style="margin: 0; font-size: 17px; line-height: 1.65">{{ q.why }}</p>
+<div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+<button class="btn btn-solid" onClick="{{ next }}">{{ nextLabel }}</button>
+<button class="btn btn-line" onClick="{{ skip }}">I do not know this part, skip ahead</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ notAnswered }}" hint-placeholder-val="{{ true }}">
+<div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+<button class="btn btn-line" onClick="{{ dontKnow }}">I do not know</button>
+<span style="font-size: 14px; color: var(--muted)">Guessing is fine, but this one tells us more.</span>
+</div>
+</sc-if>
+</section>
+</sc-if>
+
+<sc-if value="{{ inResult }}" hint-placeholder-val="{{ false }}">
+<section class="rise">
+<p style="margin: 0; font-size: 15px; color: var(--muted)">Your starting point</p>
+<h1 style="margin: 12px 0 0; font-family: var(--serif); font-weight: 600; font-size: 56px; line-height: 1.02; letter-spacing: -0.02em">Start at chapter {{ rec.n }}: {{ rec.name }}.</h1>
+<p class="hand" style="margin: 18px 0 0; font-size: 30px">{{ rec.note }}</p>
+<p style="margin: 22px 0 0; font-size: 18px; line-height: 1.65">{{ rec.reason }}</p>
+<p style="margin: 14px 0 0; font-size: 16px; line-height: 1.65; color: var(--muted)">{{ rec.caveat }}</p>
+<div style="margin-top: 28px; display: flex; flex-wrap: wrap; gap: 12px">
+<button class="btn btn-solid">Start chapter {{ rec.n }}</button>
+<a class="btn btn-line" href="Map.dc.html">See the whole map</a>
+<button class="btn btn-line" onClick="{{ restart }}">Retake the quiz</button>
+</div>
+<div style="margin-top: 40px; background: var(--sheet); border: 1px solid var(--ink)">
+<div style="padding: 14px 20px 10px 96px; border-bottom: 2px solid var(--ink); font-family: var(--serif); font-weight: 600; font-size: 20px">Your answers</div>
+<div style="position: relative">
+<div style="position: absolute; left: 72px; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--margin)" aria-hidden="true"></div>
+<sc-for list="{{ review }}" as="r" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 72px 1fr 150px; align-items: center; min-height: 52px; border-bottom: 1px solid var(--rule)">
+<span style="padding-left: 18px; font-family: var(--mono); font-size: 15px; color: var(--muted)">{{ r.n }}</span>
+<span style="padding: 0 16px 0 24px; font-size: 16px">{{ r.topic }}</span>
+<span style="padding-right: 18px; text-align: right; font-size: 14px; font-weight: 600; color: {{ r.color }}">{{ r.result }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</section>
+</sc-if>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#C2362B","options":["#C2362B","#1F4E79","#2B6648","#8A5A00"]},"$preview":{"width":1440,"height":1120}}'>
+class Component extends DCLogic {
+  state = { i: 0, picked: -1, results: [] };
+  qs = [
+    { topic: 'Tables, rows and columns', level: 1, prompt: 'In a table of orders, what is one row?', opts: ['One order record', 'One kind of information, like amount', 'The whole table', 'The database'], right: 0, why: 'A row is one record, here one order. A column holds one kind of information about every record, such as the amount.' },
+    { topic: 'Querying and filtering', level: 2, prompt: 'Which query returns only the orders over 50?', opts: ['SELECT * FROM orders WHERE amount > 50;', 'SELECT amount > 50 FROM orders;', 'FROM orders SELECT * WHERE amount > 50;', 'SELECT * WHERE orders amount > 50;'], right: 0, mono: true, why: 'A query reads SELECT, then FROM, then WHERE. WHERE comes after the table is named and holds the test each row must pass.' },
+    { topic: 'Aggregation', level: 6, prompt: 'Which clause filters groups after GROUP BY has run?', opts: ['WHERE', 'HAVING', 'ORDER BY', 'LIMIT'], right: 1, why: 'WHERE filters individual rows before grouping. HAVING filters the groups afterwards, for example only cities with more than ten customers.' },
+    { topic: 'Joins', level: 7, prompt: 'You LEFT JOIN customers to orders. A customer has no orders. What happens to that customer?', opts: ['They appear once, with NULL in the order columns', 'They are removed from the result', 'They appear twice', 'The query returns an error'], right: 0, why: 'A LEFT JOIN keeps every row from the left table. Where there is no match on the right, the right-hand columns are filled with NULL.' },
+    { topic: 'Window functions', level: 9, prompt: 'What does ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date) do?', opts: ['Numbers each customer\'s orders 1, 2, 3 by date', 'Counts all rows in the table', 'Removes duplicate orders', 'Sorts the table for good'], right: 0, why: 'PARTITION BY restarts the count for each customer, and ORDER BY sets the order inside each one. No rows are collapsed or removed.' },
+    { topic: 'Database design', level: 11, prompt: 'What is the main aim of normalizing a database to third normal form?', opts: ['Store each fact in one place to reduce repetition', 'Make every query run faster', 'Encrypt the data', 'Make the files smaller'], right: 0, why: 'Normalization removes repeated facts so a change is made once. It can make some queries need more joins, so it is about correctness first, not speed.' }
+  ];
+  levelNames = { 1: 'Foundations', 2: 'Query basics', 6: 'Aggregation', 7: 'Joins', 9: 'CTEs and window functions', 11: 'Database design', 12: 'Real-world SQL' };
+  renderVals() {
+    const s = this.state;
+    const letters = ['A', 'B', 'C', 'D'];
+    const inResult = s.i >= this.qs.length;
+    const q = this.qs[Math.min(s.i, this.qs.length - 1)];
+    const answered = s.picked !== -1;
+    const record = (correct) => {
+      const res = s.results.slice(); res.push(correct);
+      return res;
+    };
+    const pick = (idx) => () => { if (this.state.picked === -1) this.setState({ picked: idx }); };
+    const options = q.opts.map((t, idx) => {
+      const isRight = answered && idx === q.right;
+      const isWrong = answered && idx === s.picked && idx !== q.right;
+      return { letter: letters[idx], text: t, font: q.mono ? "font-family: 'IBM Plex Mono', monospace; font-size: 15px" : '', locked: answered, cls: isRight ? 'right' : (isWrong ? 'wrong' : ''), isRight: isRight, isWrong: isWrong, pick: pick(idx) };
+    });
+    const advance = (correct) => () => this.setState({ i: this.state.i + 1, picked: -1, results: this.state.results.concat([correct]) });
+    const firstMiss = s.results.indexOf(false);
+    let rec = { n: 12, name: 'Real-world SQL', note: 'you know your stuff', reason: 'You answered every question correctly, so you can start with the last chapter: indexes, views, reading query plans and the capstone project.', caveat: 'Six questions cannot cover everything. If a chapter on the map feels shaky, use "Test out first" on it, or start there.' };
+    if (inResult && firstMiss >= 0) {
+      const lv = this.qs[firstMiss].level;
+      const nm = this.levelNames[lv];
+      rec = { n: lv, name: nm, note: lv === 1 ? 'a good place to begin' : 'right where it gets interesting', reason: (firstMiss === 0 ? 'The first question caught you out, so the best place to begin is the start. Chapter 1 covers what a database holds before any query.' : 'You were comfortable up to ' + this.qs[firstMiss - 1].topic.toLowerCase() + ', and ' + this.qs[firstMiss].topic.toLowerCase() + ' is the first place a question caught you out. Chapter ' + lv + ' is built for exactly that.'), caveat: lv > 2 && lv !== 11 ? 'The quiz only sampled one idea per level, so chapters between 2 and ' + lv + ' were not all tested. Skim them from the map, and use "Test out first" on any that feel new.' : 'Everything after this chapter is open to you any time from the map.' };
+    }
+    const review = this.qs.map((x, idx) => {
+      const r = s.results[idx];
+      return { n: idx + 1, topic: x.topic, result: r === true ? '✓ correct' : (r === false ? '✗ review in chapter ' + x.level : 'not answered'), color: r === true ? '#2B6648' : (r === false ? '#C2362B' : '#625D50') };
+    });
+    return {
+      accent: this.props.accent ?? '#C2362B',
+      inQuiz: !inResult, inResult: inResult,
+      num: Math.min(s.i + 1, this.qs.length), q: q, options: options,
+      answered: answered, notAnswered: !answered,
+      next: () => { const correct = this.state.picked === q.right; advance(correct)(); },
+      nextLabel: s.i === this.qs.length - 1 ? 'See where to start' : 'Next question',
+      dontKnow: advance(false),
+      skip: () => { const res = this.state.results.concat([this.state.picked === q.right]); const rest = this.qs.length - res.length; for (let k = 0; k < rest; k++) res.push(false); this.setState({ i: this.qs.length, picked: -1, results: res }); },
+      restart: () => this.setState({ i: 0, picked: -1, results: [] }),
+      rec: rec, review: review
+    };
+  }
+}
+</script>
+</body>
+</html>

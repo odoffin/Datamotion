@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chapter map: start anywhere</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Caveat:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F3EDE0;--sheet:#FBF8F1;--ink:#1D1B16;--muted:#625D50;--rule:#D9D1BC;--margin:#D98B83;--good:#2B6648;--key:#1F4E79;--serif:'Fraunces',Georgia,serif;--mono:'IBM Plex Mono',monospace;--hand:'Caveat',cursive;--sans:'Inter',system-ui,sans-serif}
+body{margin:0;background:var(--paper)}
+*{box-sizing:border-box}
+button{font-family:var(--sans);cursor:pointer}
+a{color:var(--muted);text-decoration:none}
+a:hover{color:var(--ink);text-decoration:underline}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.rise{animation:rise .5s ease both}
+.btn{min-height:44px;padding:0 22px;border-radius:2px;font-size:15px;font-weight:600;display:inline-flex;align-items:center;text-decoration:none}
+.btn-solid{background:var(--ink);color:var(--sheet);border:1px solid var(--ink)}
+.btn-solid:hover{background:#000;color:var(--sheet);text-decoration:none}
+.btn-line{background:transparent;color:var(--ink);border:1px solid var(--ink)}
+.btn-line:hover{background:var(--ink);color:var(--sheet);text-decoration:none}
+.chrow{display:grid;grid-template-columns:72px 1fr 150px;align-items:center;width:100%;min-height:72px;padding:10px 0;background:transparent;border:0;border-bottom:1px solid var(--rule);text-align:left;color:var(--ink)}
+.chrow:hover{background:rgba(29,27,22,0.05)}
+.chrow.sel{background:var(--sheet);box-shadow:inset 4px 0 0 var(--ink)}
+.hand{font-family:var(--hand);font-size:26px;line-height:1;color:var(--pen)}
+@media (prefers-reduced-motion: reduce){.rise{animation:none}}
+</style>
+</helmet>
+
+<div style="--pen: {{ accent }}; min-height: 1320px; background: var(--paper); color: var(--ink); font-family: var(--sans)">
+
+<header style="display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; justify-content: space-between; padding: 28px 56px 0">
+<span style="font-family: var(--serif); font-style: italic; font-weight: 600; font-size: 26px">Datamotion</span>
+<nav style="display: flex; flex-wrap: wrap; gap: 28px; font-size: 15px">
+<a href="#" style="color: var(--ink); text-decoration: underline">Chapters</a>
+<a href="#">Review</a>
+<a href="#">My progress</a>
+</nav>
+</header>
+
+<main style="padding: 56px 56px 96px; max-width: 1440px; margin: 0 auto">
+
+<section style="max-width: 720px">
+<h1 style="margin: 0; font-family: var(--serif); font-weight: 600; font-size: 60px; line-height: 1.02; letter-spacing: -0.02em">Start where you are.</h1>
+<p style="margin: 22px 0 0; font-size: 18px; line-height: 1.6">Twelve chapters, from your first query to designing a database. Begin at the top, jump to any chapter you already know, or take a short quiz and we will point you to a starting place.</p>
+<div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px">
+<a class="btn btn-solid" href="Placement.dc.html">Take the placement quiz</a>
+<span style="align-self: center; font-size: 15px; color: var(--muted)">Six questions. Skip it any time.</span>
+</div>
+</section>
+
+<div style="margin-top: 56px; display: flex; flex-wrap: wrap; gap: 48px; align-items: flex-start">
+
+<section style="flex: 1.3 1 600px; min-width: 0; background: var(--sheet); border: 1px solid var(--ink)">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 16px 20px 12px 96px; border-bottom: 2px solid var(--ink); font-size: 15px">
+<span style="font-family: var(--serif); font-weight: 600; font-size: 20px">Contents</span>
+<span style="color: var(--muted)">Pick any line</span>
+</div>
+<div style="position: relative">
+<div style="position: absolute; left: 72px; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--margin)" aria-hidden="true"></div>
+<sc-for list="{{ items }}" as="it" hint-placeholder-count="16">
+<div>
+<sc-if value="{{ it.isHead }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: baseline; gap: 14px; padding: 18px 20px 6px 96px; border-bottom: 1px solid var(--rule)">
+<span style="font-size: 14px; font-weight: 600; color: var(--muted)">{{ it.label }}</span>
+<span class="hand">{{ it.note }}</span>
+</div>
+</sc-if>
+<sc-if value="{{ it.isRow }}" hint-placeholder-val="{{ true }}">
+<button class="chrow {{ it.cls }}" onClick="{{ it.pick }}" aria-pressed="{{ it.pressed }}">
+<span style="padding-left: 18px; font-family: var(--mono); font-size: 16px; color: var(--muted)">{{ it.n }}</span>
+<span style="padding: 0 16px 0 24px; display: block">
+<span style="display: block; font-family: var(--serif); font-weight: 600; font-size: 22px; line-height: 1.2">{{ it.name }}</span>
+<span style="display: block; margin-top: 4px; font-size: 14px; line-height: 1.5; color: var(--muted)">{{ it.topics }}</span>
+</span>
+<span style="padding-right: 18px; text-align: right; font-size: 14px; font-weight: 600; color: {{ it.statusColor }}">{{ it.status }}</span>
+</button>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</section>
+
+<aside style="flex: 1 1 380px; min-width: 0; position: sticky; top: 24px">
+<div class="rise" style="background: var(--sheet); border: 1px solid var(--ink); padding: 28px; box-shadow: 6px 6px 0 var(--ink)">
+<p style="margin: 0; font-size: 15px; color: var(--muted)">Chapter {{ sel.n }} of 12</p>
+<h2 style="margin: 8px 0 0; font-family: var(--serif); font-weight: 600; font-size: 36px; line-height: 1.1; letter-spacing: -0.01em">{{ sel.name }}</h2>
+<p style="margin: 16px 0 0; font-size: 16px; line-height: 1.65">{{ sel.blurb }}</p>
+<p style="margin: 16px 0 0; font-size: 15px; line-height: 1.6"><strong>You will type:</strong> <code style="font-family: var(--mono); font-size: 14px">{{ sel.sample }}</code></p>
+<p style="margin: 16px 0 0; font-size: 15px; line-height: 1.6; color: var(--muted)">{{ sel.prereq }}</p>
+<p class="hand" style="margin: 14px 0 0; font-size: 26px">{{ sel.note }}</p>
+<div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px">
+<button class="btn btn-solid">Start chapter {{ sel.n }}</button>
+<a class="btn btn-line" href="Placement.dc.html">Test out first</a>
+</div>
+<p style="margin: 14px 0 0; font-size: 14px; line-height: 1.6; color: var(--muted)">Testing out is a five question check. Pass it and the chapter counts as known, and it comes back later as a review.</p>
+</div>
+</aside>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#C2362B","options":["#C2362B","#1F4E79","#2B6648","#8A5A00"]},"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+  state = { sel: 3 };
+  chapters = [
+    { n: 1, name: 'Foundations', topics: 'Tables, rows, columns and data types', blurb: 'Before any query, learn what a database actually holds: tables made of rows and columns, and the type of value each column keeps.', sample: 'SELECT * FROM orders;', pre: [], note: 'new to SQL? begin here' },
+    { n: 2, name: 'Query basics', topics: 'SELECT, aliases, DISTINCT, LIMIT', blurb: 'Choose the columns you want, rename them, remove duplicates and limit how many rows come back.', sample: 'SELECT DISTINCT city FROM customers;', pre: [1], note: '' },
+    { n: 3, name: 'Filtering', topics: 'WHERE, AND, OR, NOT, IN, BETWEEN, LIKE, NULL', blurb: 'Keep only the rows that pass a test, and learn the traps: boundaries, text matching and the odd behaviour of NULL.', sample: 'SELECT * FROM orders WHERE amount > 50;', pre: [2], note: 'watch the boundary' },
+    { n: 4, name: 'Sorting and conditional logic', topics: 'ORDER BY, CASE', blurb: 'Put results in the order you want, and write if-this-then-that rules inside a query.', sample: 'SELECT * FROM orders ORDER BY amount DESC;', pre: [2], note: '' },
+    { n: 5, name: 'Functions', topics: 'Text, number and date functions', blurb: 'Clean and reshape values: change case, round numbers, pull the month out of a date.', sample: "SELECT UPPER(name) FROM customers;", pre: [2], note: '' },
+    { n: 6, name: 'Aggregation', topics: 'COUNT, SUM, AVG, GROUP BY, HAVING', blurb: 'Collapse many rows into one answer per group, and learn when to filter before grouping and when after.', sample: 'SELECT city, COUNT(*) FROM customers GROUP BY city;', pre: [3], note: 'where vs having' },
+    { n: 7, name: 'Joins', topics: 'INNER, LEFT, several tables, self-join', blurb: 'Combine tables that share a key, and see exactly which rows match, which drop out and which turn into NULL.', sample: 'SELECT * FROM orders JOIN customers ON orders.customer_id = customers.id;', pre: [3], note: 'the big one' },
+    { n: 8, name: 'Subqueries and set operations', topics: 'Subqueries, UNION, INTERSECT, EXCEPT', blurb: 'Use one query inside another, and stack results from separate queries.', sample: 'SELECT * FROM orders WHERE amount > (SELECT AVG(amount) FROM orders);', pre: [7], note: '' },
+    { n: 9, name: 'CTEs and window functions', topics: 'WITH, ROW_NUMBER, RANK, running totals', blurb: 'Name a step so a long query reads top to bottom, and calculate across rows without collapsing them.', sample: 'SELECT *, ROW_NUMBER() OVER (ORDER BY amount DESC) FROM orders;', pre: [6, 7], note: 'analysts use this daily' },
+    { n: 10, name: 'Changing data', topics: 'CREATE TABLE, INSERT, UPDATE, DELETE, constraints, transactions', blurb: 'Build your own tables in the practice sandbox, change them safely, and protect them with constraints.', sample: 'CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT);', pre: [2], note: 'opens the sandbox' },
+    { n: 11, name: 'Database design', topics: 'Entities, keys, relationships, normalization, star schema', blurb: 'Decide what the tables should be before you build them: remove repeated facts, link tables with keys, and shape data for analysis.', sample: 'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER REFERENCES customers(id));', pre: [7, 10], note: 'design on paper first' },
+    { n: 12, name: 'Real-world SQL', topics: 'Indexes, views, reading query plans, capstone project', blurb: 'Make queries fast, hide complexity behind views, and finish by designing and analysing a database of your own.', sample: 'CREATE INDEX idx_orders_customer ON orders(customer_id);', pre: [9, 11], note: 'your capstone lives here' }
+  ];
+  groups = [
+    { from: 1, label: 'Getting started', note: 'start here if you are new' },
+    { from: 6, label: 'Answering real questions', note: 'know this? test out' },
+    { from: 10, label: 'Building and designing', note: 'the part most courses skip' }
+  ];
+  renderVals() {
+    const done = [1, 2];
+    const cur = 3;
+    const nameOf = (n) => this.chapters[n - 1].name;
+    const items = [];
+    this.chapters.forEach((c) => {
+      const g = this.groups.filter((x) => x.from === c.n)[0];
+      if (g) items.push({ isHead: true, isRow: false, label: g.label, note: g.note });
+      const isDone = done.indexOf(c.n) >= 0;
+      const status = isDone ? '✓ done' : (c.n === cur ? 'in progress' : 'not started');
+      items.push({
+        isHead: false, isRow: true, n: c.n, name: c.name, topics: c.topics, status: status,
+        statusColor: isDone ? '#2B6648' : (c.n === cur ? '#1D1B16' : '#625D50'),
+        cls: c.n === this.state.sel ? 'sel' : '', pressed: c.n === this.state.sel ? 'true' : 'false',
+        pick: () => this.setState({ sel: c.n })
+      });
+    });
+    const c = this.chapters[this.state.sel - 1];
+    const open = c.pre.filter((p) => done.indexOf(p) < 0);
+    let prereq;
+    if (c.pre.length === 0) prereq = 'No prerequisites. A good first chapter.';
+    else if (open.length === 0) prereq = 'Builds on ' + c.pre.map(nameOf).join(' and ') + ', which you have finished.';
+    else prereq = 'Works best after ' + open.map(nameOf).join(' and ') + ', but you can start here if you already know it.';
+    return {
+      accent: this.props.accent ?? '#C2362B',
+      items: items,
+      sel: { n: c.n, name: c.name, blurb: c.blurb, sample: c.sample, prereq: prereq, note: c.note }
+    };
+  }
+}
+</script>
+</body>
+</html>
