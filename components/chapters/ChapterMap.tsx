@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Breadcrumb, Button, ButtonLink, Disclosure, LedgerSheet, MarginNote } from "@/components/ledger";
 import { chapterByNumber, chapterGroups, chapterOfLesson, chapters, type Chapter } from "@/content/chapters";
 import { getLesson } from "@/content/lessons";
-import { chapterEntry, chapterStatus, prerequisiteText, type ChapterStatus } from "@/lib/chapter-status";
+import { chapterEntry, chapterStatus, countsLine, prerequisiteText, statusCounts, type ChapterStatus } from "@/lib/chapter-status";
 import { prefersReducedMotion } from "@/lib/hooks/use-prefers-reduced-motion";
 import { useProgressHydrated } from "@/lib/hooks/use-progress-hydrated";
 import { useProgress } from "@/store/progress";
@@ -82,7 +82,19 @@ export function ChapterMap() {
         </div>
       </section>
 
-      <div className="mt-10 max-w-[720px]">
+      {/* Progress at a glance; space is held while saved progress loads. */}
+      <p role="status" className="mt-8 min-h-[1.6em] text-base font-semibold">
+        {hydrated ? (
+          <>
+            <span className="sr-only">Your progress: </span>
+            {countsLine(statusCounts(chapters, progress))}
+          </>
+        ) : (
+          <span className="font-normal text-muted">Loading your progress</span>
+        )}
+      </p>
+
+      <div className="mt-4 max-w-[720px]">
         <Disclosure openLabel="What the status words mean" closeLabel="Hide the status words">
           <dl className="space-y-2.5">
             {LEGEND.map(({ status, meaning }) => (

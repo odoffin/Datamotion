@@ -44,3 +44,23 @@ export function chapterEntry(c: Chapter, p: ProgressData): { lessonId: string; l
     status === "done" ? `Revisit chapter ${c.n}` : status === "in progress" ? `Continue chapter ${c.n}` : `Start chapter ${c.n}`;
   return { lessonId: next, label };
 }
+
+export type StatusCounts = Record<ChapterStatus, number>;
+
+export function statusCounts(list: readonly Chapter[], p: ProgressData): StatusCounts {
+  const counts: StatusCounts = { done: 0, "in progress": 0, "not started": 0, "looked familiar in the quiz": 0, "coming soon": 0 };
+  for (const c of list) counts[chapterStatus(c, p)]++;
+  return counts;
+}
+
+/**
+ * "1 done, 0 in progress, 2 not started, 9 coming soon". The first three are
+ * always shown; the other two only when they apply. The parts add up to the
+ * number of chapters.
+ */
+export function countsLine(counts: StatusCounts): string {
+  const parts = [`${counts.done} done`, `${counts["in progress"]} in progress`, `${counts["not started"]} not started`];
+  if (counts["looked familiar in the quiz"]) parts.push(`${counts["looked familiar in the quiz"]} looked familiar in the quiz`);
+  if (counts["coming soon"]) parts.push(`${counts["coming soon"]} coming soon`);
+  return parts.join(", ");
+}

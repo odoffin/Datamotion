@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { chapterByNumber } from "@/content/chapters";
-import { chapterEntry, chapterStatus, prerequisiteText } from "@/lib/chapter-status";
+import { chapterByNumber, chapters } from "@/content/chapters";
+import { chapterEntry, chapterStatus, countsLine, prerequisiteText, statusCounts } from "@/lib/chapter-status";
 import type { ProgressData } from "@/store/progress";
 
 const base: ProgressData = { lessons: {}, placement: null, knownChapters: [], lastLessonId: null };
@@ -34,5 +34,22 @@ describe("chapter status", () => {
     expect(prerequisiteText(filtering, { ...base, knownChapters: [2] })).toBe(
       "Builds on Query basics, which you have finished or which looked familiar in the quiz.",
     );
+  });
+});
+
+describe("progress counts", () => {
+  it("a fresh learner", () => {
+    expect(countsLine(statusCounts(chapters, base))).toBe("0 done, 0 in progress, 1 not started, 11 coming soon");
+  });
+  it("after finishing Filtering and a quiz", () => {
+    const p = { ...base, lessons: lesson("done"), knownChapters: [1, 2] };
+    expect(countsLine(statusCounts(chapters, p))).toBe(
+      "1 done, 0 in progress, 0 not started, 2 looked familiar in the quiz, 9 coming soon",
+    );
+  });
+  it("always adds up to the twelve chapters", () => {
+    const c = statusCounts(chapters, { ...base, lessons: lesson("in progress"), knownChapters: [6] });
+    expect(Object.values(c).reduce((a, b) => a + b, 0)).toBe(12);
+    expect(c["in progress"]).toBe(1);
   });
 });
