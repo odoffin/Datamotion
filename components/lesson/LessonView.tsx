@@ -87,7 +87,8 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
   const busy = status === "booting" || status === "preparing-checker" || status === "running";
   const bootLine =
     status === "booting"
-      ? "Starting the database. It downloads once, the first time you open a lesson."
+      ? // Shown only while the database starts; gone as soon as it is ready.
+        "First visit only: downloading about 10 MB. Later visits are instant."
       : status === "preparing-checker"
         ? "Preparing the checker, so it can point at mistakes."
         : null;
