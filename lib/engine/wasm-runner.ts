@@ -27,6 +27,9 @@ function connect(): Promise<AsyncDuckDBConnection> {
     await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
     URL.revokeObjectURL(workerUrl);
     const conn = await db.connect();
+    // The query checker needs json_serialize_sql, which lives in the json
+    // extension. Load it while downloads are still allowed.
+    await conn.query("LOAD json");
     // Sandbox: no reading local files or URLs (read_csv('https://…') etc.).
     await conn.query("SET enable_external_access = false");
     return conn;

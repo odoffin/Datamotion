@@ -10,12 +10,12 @@ export function resultCountText(result: RunQueryResult): string {
 
 interface ResultTableProps {
   result: RunQueryResult;
-  /** Whether the real rows equal the animated result, cell for cell. */
-  matchesAnimation: boolean;
+  /** A verdict line above the rows, e.g. whether they meet the goal. */
+  verdict?: { ok: boolean; text: string };
 }
 
-/** DuckDB's actual output, shown under the animation as proof. */
-export function ResultTable({ result, matchesAnimation }: ResultTableProps) {
+/** DuckDB's actual output for the learner's query. */
+export function ResultTable({ result, verdict }: ResultTableProps) {
   if (result.error) {
     return (
       <p role="alert" className="px-5 py-4 text-base text-pen">
@@ -25,10 +25,12 @@ export function ResultTable({ result, matchesAnimation }: ResultTableProps) {
   }
   return (
     <>
-      <p className={`flex items-center gap-2 px-5 py-3 text-[15px] font-semibold ${matchesAnimation ? "text-good" : "text-pen"}`}>
-        {matchesAnimation ? <CircleCheck size={16} aria-hidden /> : <CircleAlert size={16} aria-hidden />}
-        {matchesAnimation ? "Matches the ledger above, row for row" : "Does not match the ledger above"}
-      </p>
+      {verdict && (
+        <p className={`flex items-center gap-2 px-5 py-3 text-[15px] font-semibold ${verdict.ok ? "text-good" : "text-pen"}`}>
+          {verdict.ok ? <CircleCheck size={16} aria-hidden /> : <CircleAlert size={16} aria-hidden />}
+          {verdict.text}
+        </p>
+      )}
       <div className="max-h-[28rem] overflow-auto border-t border-rule">
         <table className="w-full border-collapse font-mono text-sm">
           <thead className="sticky top-0 bg-sheet">

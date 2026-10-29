@@ -40,3 +40,8 @@ export function numericColumns(dataset: Dataset, tableName: string): string[] {
     .filter((c) => NUMERIC_TYPES.includes(c.type))
     .map((c) => c.name);
 }
+
+/** Every table and column name, lower-cased (used by the error pointer). */
+export function datasetIdentifiers(dataset: Dataset): string[] {
+  return dataset.tables.flatMap((t) => [t.name, ...t.columns.map((c) => c.name)]).map((n) => n.toLowerCase());
+}

@@ -60,6 +60,37 @@ body {
 }
 .rise { animation: rise 0.7s ease both; }
 
+/* Two identical shakes: alternating the name replays it on every failed run. */
+@keyframes shake-a {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+@keyframes shake-b {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.shake-a { animation: shake-a 0.45s ease-in-out; }
+.shake-b { animation: shake-b 0.45s ease-in-out; }
+
+/* The red-pen circle round a wrong token. */
+.pen-circle {
+  color: var(--pen);
+  outline: 2px solid var(--pen);
+  outline-offset: 5px;
+  border-radius: 50%;
+}
+.pen-circle-box {
+  outline: 2px solid var(--pen);
+  outline-offset: 5px;
+  border-radius: 1.75rem;
+}
+
 .slip {
   max-height: 2000px;
   transition: opacity 0.9s ease, filter 0.9s ease, transform 0.9s ease,
@@ -86,6 +117,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise { animation: none; }
+  .rise, .shake-a, .shake-b { animation: none; }
   .slip, .slip-gone, .ledger-line { transition: none; }
 }

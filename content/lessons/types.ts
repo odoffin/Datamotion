@@ -1,23 +1,9 @@
 import type { DatasetId } from "@/content/datasets";
+import type { LessonGoal } from "@/engine/check";
+import type { FilterOperator } from "@/engine/scenes/filter";
 import type { SceneType } from "@/engine/trace";
 
-export interface SelectSlot<T extends string = string> {
-  kind: "select";
-  label: string;
-  options: readonly T[];
-  default: T;
-}
-
-export interface NumberSlot {
-  kind: "number";
-  label: string;
-  default: number;
-  step?: number;
-}
-
-export type Slot = SelectSlot | NumberSlot;
-
-export interface LessonDefinition<S extends Record<string, Slot> = Record<string, Slot>> {
+export interface LessonDefinition {
   id: string;
   concept_id: string;
   title: string;
@@ -29,7 +15,16 @@ export interface LessonDefinition<S extends Record<string, Slot> = Record<string
   scene: SceneType;
   /** The table the scene operates on. */
   table: string;
-  /** Uses {slotName} placeholders, e.g. "WHERE {column} {operator} {threshold}". */
-  queryTemplate: string;
-  editableSlots: S;
+  /** What the learner's query must return. Checked by result, not by text. */
+  goal: LessonGoal;
+  /** What the slip starts with (may contain a deliberate mistake). */
+  starterSql: string;
+  /** Gentle nudges that never give the answer away, mildest first. */
+  hints: string[];
+  nextLessonId?: string;
+  /**
+   * The filter the ledger animates once the learner's result is approved.
+   * TODO(step 6): derive this from the learner's own query instead.
+   */
+  animation: { column: string; operator: FilterOperator; threshold: number };
 }

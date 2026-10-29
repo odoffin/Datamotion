@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { shop } from "@/content/datasets/shop";
-import { filterLesson } from "@/content/lessons/filter";
+import { numericColumns } from "@/content/datasets/types";
 import type { QueryRunner } from "@/engine/query-runner";
 import { rowStatesAt } from "@/engine/playback";
 import {
@@ -17,7 +17,7 @@ beforeAll(async () => {
   runner = await createNodeRunner(shop);
 });
 
-const allowed = filterLesson.editableSlots.column.options;
+const allowed = numericColumns(shop, "orders");
 
 function spec(column: string, operator: FilterOperator, threshold: number): FilterSpec {
   const v = validateFilterSlots("orders", { column, operator, threshold }, allowed);

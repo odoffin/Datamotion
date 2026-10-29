@@ -1,16 +1,7 @@
-import { shop } from "@/content/datasets/shop";
-import { numericColumns } from "@/content/datasets/types";
-import { FILTER_OPERATORS } from "@/engine/scenes/filter";
-import type { LessonDefinition, NumberSlot, SelectSlot } from "./types";
+import type { LessonDefinition } from "./types";
 
-type FilterLessonSlots = {
-  column: SelectSlot;
-  operator: SelectSlot<(typeof FILTER_OPERATORS)[number]>;
-  threshold: NumberSlot;
-};
-
-export const filterLesson: LessonDefinition<FilterLessonSlots> = {
-  id: "filter-where-basics",
+export const filterLesson: LessonDefinition = {
+  id: "filter",
   concept_id: "filter",
   title: "Filtering rows with WHERE",
   headline: "Keep only the rows that pass the test.",
@@ -26,20 +17,15 @@ export const filterLesson: LessonDefinition<FilterLessonSlots> = {
   datasetId: "shop",
   scene: "filter",
   table: "orders",
-  queryTemplate: "SELECT * FROM orders WHERE {column} {operator} {threshold}",
-  editableSlots: {
-    column: {
-      kind: "select",
-      label: "Column",
-      options: numericColumns(shop, "orders"),
-      default: "amount",
-    },
-    operator: {
-      kind: "select",
-      label: "Operator",
-      options: FILTER_OPERATORS,
-      default: ">",
-    },
-    threshold: { kind: "number", label: "Threshold", default: 50, step: 1 },
+  goal: {
+    description: "List every order, with all its columns, whose amount is greater than 50.",
+    referenceSql: "SELECT * FROM orders WHERE amount > 50",
+    compare: "rows-any-order",
   },
+  starterSql: "SELECT * FORM orders WHERE amount > 50",
+  hints: [
+    "Read the slip word by word. Is every keyword spelled right?",
+    "Greater than 50 means 50 itself does not count.",
+  ],
+  animation: { column: "amount", operator: ">", threshold: 50 },
 };
