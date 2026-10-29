@@ -255,6 +255,7 @@ function Result({
         </h1>
         <MarginNote className="mt-4 block text-[30px]">{rec.note}</MarginNote>
         <p className="mt-5 text-lg leading-[1.65]">{rec.reason}</p>
+        <p className="mt-3 border-l-2 border-ink pl-4 text-base font-semibold leading-relaxed">{rec.why}</p>
         {rec.caveats.map((c) => (
           <p key={c} className="mt-3 text-base leading-[1.65] text-muted">
             {c}

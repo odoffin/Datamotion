@@ -75,6 +75,24 @@ describe("placement scoring", () => {
   });
 });
 
+describe("why line", () => {
+  it("names the answers behind the suggestion", () => {
+    expect(recommend(["correct", "correct", "correct", "wrong"]).why).toBe(
+      "Why: you answered every question up to the grouping question correctly, and the joins question was the first one you missed.",
+    );
+    expect(recommend(["correct", "unknown"]).why).toBe(
+      "Why: you answered the tables and rows question correctly, and the SELECT and WHERE question was the first one you said you did not know.",
+    );
+    expect(recommend(skipRest(["correct", "correct"])).why).toBe(
+      "Why: you answered every question up to the SELECT and WHERE question correctly, and the grouping question was where you skipped ahead.",
+    );
+  });
+  it("covers the first question and a clean sweep", () => {
+    expect(recommend(["wrong"]).why).toBe("Why: the tables and rows question was the first one you missed.");
+    expect(recommend(QUESTIONS.map(() => "correct" as const)).why).toBe("Why: you answered all six questions correctly.");
+  });
+});
+
 describe("quiz controls", () => {
   it("Back reopens the previous question unanswered", () => {
     expect(previousAnswers(["correct", "wrong"])).toEqual(["correct"]);
