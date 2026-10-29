@@ -1,4 +1,5 @@
 export { Breadcrumb, type Crumb } from "./Breadcrumb";
+export { ConceptTags } from "./ConceptTags";
 export { Button, ButtonLink, buttonClass, type ButtonVariant } from "./Button";
 export { Disclosure } from "./Disclosure";
 export { Header } from "./Header";

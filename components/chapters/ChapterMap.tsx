@@ -2,7 +2,7 @@
 
 import { Check, Clock, Eye, PenLine } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Breadcrumb, Button, ButtonLink, Disclosure, LedgerSheet, MarginNote } from "@/components/ledger";
+import { Breadcrumb, Button, ButtonLink, ConceptTags, Disclosure, LedgerSheet, MarginNote } from "@/components/ledger";
 import { chapterByNumber, chapterGroups, chapterOfLesson, chapters, type Chapter } from "@/content/chapters";
 import { getLesson } from "@/content/lessons";
 import { chapterEntry, chapterStatus, countsLine, prerequisiteText, statusCounts, type ChapterStatus } from "@/lib/chapter-status";
@@ -259,9 +259,12 @@ function ChapterDetail({ chapter: c, hydrated }: { chapter: Chapter; hydrated: b
         </p>
       )}
       {firstLesson && (
-        <p className="mt-5 text-[15px] text-muted">
-          {c.lessonIds.length === 1 ? "1 lesson so far" : `${c.lessonIds.length} lessons so far`}: {firstLesson.title}.
-        </p>
+        <>
+          <p className="mt-5 text-[15px] text-muted">
+            {c.lessonIds.length === 1 ? "1 lesson so far" : `${c.lessonIds.length} lessons so far`}: {firstLesson.title}.
+          </p>
+          <ConceptTags concepts={firstLesson.concepts} className="mt-2.5" />
+        </>
       )}
 
       <div className="mt-6 flex flex-wrap gap-3">

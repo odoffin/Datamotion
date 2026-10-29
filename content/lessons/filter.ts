@@ -4,6 +4,7 @@ export const filterLesson: LessonDefinition = {
   id: "filter",
   concept_id: "filter",
   title: "Filtering rows with WHERE",
+  concepts: ["WHERE", "Comparison operators", "Boundaries: > versus >="],
   headline: "Keep only the rows that pass the test.",
   explanation: {
     short:

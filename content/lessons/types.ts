@@ -6,6 +6,8 @@ export interface LessonDefinition {
   id: string;
   concept_id: string;
   title: string;
+  /** Short concept tags shown on the lesson and the chapter map, most central first. */
+  concepts: string[];
   /** The big serif line at the top of the lesson. */
   headline: string;
   /** Short plain-language explanation first; the long one sits behind a disclosure. */

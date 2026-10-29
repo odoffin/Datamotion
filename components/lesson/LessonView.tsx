@@ -2,7 +2,7 @@
 
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Button, ButtonLink, Disclosure, LedgerSheet, Slip } from "@/components/ledger";
+import { Button, ButtonLink, ConceptTags, Disclosure, LedgerSheet, Slip } from "@/components/ledger";
 import { PlaybackBar } from "@/components/PlaybackBar";
 import { ResultTable, resultCountText } from "@/components/ResultTable";
 import { FilterStage, filterCountText } from "@/components/stage/FilterStage";
@@ -103,6 +103,7 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
         <h1 className="font-serif text-[clamp(2.5rem,6vw,3.75rem)] font-semibold leading-[1.02] tracking-[-0.02em]">
           {lesson.headline}
         </h1>
+        <ConceptTags concepts={lesson.concepts} className="mt-5" />
         <p className="mt-[22px] text-lg leading-relaxed">{lesson.explanation.short}</p>
         <Disclosure>
           {lesson.explanation.long.map((p) => (
