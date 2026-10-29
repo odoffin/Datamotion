@@ -21,8 +21,10 @@ export interface LessonDefinition<S extends Record<string, Slot> = Record<string
   id: string;
   concept_id: string;
   title: string;
-  /** Short plain-language explanation shown before running. */
-  explanation: string;
+  /** The big serif line at the top of the lesson. */
+  headline: string;
+  /** Short plain-language explanation first; the long one sits behind a disclosure. */
+  explanation: { short: string; long: string[] };
   datasetId: DatasetId;
   scene: SceneType;
   /** The table the scene operates on. */

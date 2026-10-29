@@ -7,29 +7,25 @@ import { EditorView } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
 
-const theme = EditorView.theme(
-  {
-    "&": {
-      backgroundColor: "var(--panel)",
-      color: "var(--text)",
-      fontSize: "13px",
-      borderRadius: "8px",
-      border: "1px solid var(--border)",
-    },
-    ".cm-content": { fontFamily: "var(--font-jetbrains-mono), monospace", padding: "10px 4px" },
-    ".cm-scroller": { fontFamily: "inherit" },
-    "&.cm-focused": { outline: "none" },
+// Written on the slip: no box of its own, just an ink underline.
+const theme = EditorView.theme({
+  "&": {
+    backgroundColor: "transparent",
+    color: "var(--ink)",
+    fontSize: "clamp(16px, 2.4vw, 21px)",
+    borderBottom: "2px solid var(--ink)",
   },
-  { dark: true },
-);
+  ".cm-content": { fontFamily: "var(--font-plex-mono), monospace", padding: "10px 0" },
+  ".cm-line": { padding: "0 2px" },
+  ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.4" },
+  "&.cm-focused": { outline: "none" },
+});
 
-// Syntax colours chosen for ≥4.5:1 contrast on the panel colour.
 const highlight = HighlightStyle.define([
-  { tag: tags.keyword, color: "#9ECBFF", fontWeight: "600" },
-  { tag: [tags.number, tags.bool], color: "#B5E8B0" },
-  { tag: tags.string, color: "#F7B3CF" },
-  { tag: [tags.operator, tags.punctuation], color: "#F2F2F7" },
-  { tag: tags.name, color: "#F2F2F7" },
+  { tag: tags.keyword, color: "var(--key)", fontWeight: "500" },
+  { tag: [tags.number, tags.bool], color: "var(--num)" },
+  { tag: [tags.string, tags.operator, tags.punctuation, tags.name], color: "var(--ink)" },
+  { tag: tags.comment, color: "var(--muted)" },
 ]);
 
 /** Read-only CodeMirror view of the SQL rebuilt from the slots. */

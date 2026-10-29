@@ -1,100 +1,89 @@
 "use client";
 
-import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { useMemo } from "react";
-import { rowStatesAt } from "@/engine/playback";
-import type { FilterScene } from "@/engine/scenes/filter";
+import { useEffect, useMemo, useRef } from "react";
+import { LedgerRow, MarginNote, type Verdict } from "@/components/ledger";
+import { rowStatesAt, type RowStatus } from "@/engine/playback";
+import { formatNumber, type FilterScene } from "@/engine/scenes/filter";
+import { prefersReducedMotion } from "@/lib/hooks/use-prefers-reduced-motion";
 import { formatCell } from "./format";
-import { RowBar } from "./RowBar";
 
+const VERDICT: Record<RowStatus, Verdict | null> = {
+  idle: null,
+  checking: "checking",
+  pass: "kept",
+  emitted: "kept",
+  fail: "dropped",
+  removed: "dropped",
+};
+
+/** Summary for the sheet header, e.g. "17 of 40 rows kept". */
+export function filterCountText(scene: FilterScene, stepIndex: number): string {
+  const { trace, table } = scene;
+  const states = rowStatesAt(trace, table.rows.map((r) => r.rid), stepIndex);
+  const total = table.rows.length;
+  let checked = 0;
+  let kept = 0;
+  for (const v of states.values()) {
+    if (v.status === "pass" || v.status === "emitted") kept++;
+    if (v.status !== "idle" && v.status !== "checking") checked++;
+  }
+  if (stepIndex >= trace.steps.length - 1) return `${kept} of ${total} rows kept`;
+  if (checked === 0) return `${total} rows`;
+  return `${checked} of ${total} checked, ${kept} kept`;
+}
+
+/** The orders ledger: every row in place, each gets a verdict as the trace plays. */
 export function FilterStage({ scene, stepIndex }: { scene: FilterScene; stepIndex: number }) {
   const { table, trace, spec } = scene;
   const states = useMemo(
     () => rowStatesAt(trace, table.rows.map((r) => r.rid), stepIndex),
     [trace, table.rows, stepIndex],
   );
-  const focusColumn = table.columns.indexOf(spec.column);
-  // Each column is at least as wide as its widest value, so data never truncates.
-  const gridTemplate = useMemo(() => {
-    const widths = table.columns.map((_, i) =>
-      Math.max(2, ...table.rows.map((r) => formatCell(r.cells[i]).length)),
-    );
-    return `${widths.map((w) => `minmax(${w + 1}ch, 1fr)`).join(" ")} 1rem`;
-  }, [table]);
-  const emittedIds = new Set(
-    [...states].filter(([, v]) => v.status === "emitted").map(([id]) => id),
-  );
-  const source = table.rows.filter((r) => {
-    const s = states.get(r.rid)?.status;
-    return s !== "removed" && s !== "emitted";
-  });
-  const result = table.rows.filter((r) => emittedIds.has(r.rid));
+  const focus = table.columns.indexOf(spec.column);
+  const list = useRef<HTMLDivElement>(null);
 
-  const header = (
-    <div
-      className="grid gap-2 pl-3 pr-2 font-mono text-[11px] text-text-secondary"
-      style={{ gridTemplateColumns: gridTemplate }}
-    >
-      {table.columns.map((c) => (
-        <span key={c} className={c === spec.column ? "truncate font-semibold text-text" : "truncate"}>
-          {c}
-        </span>
-      ))}
-      <span />
-    </div>
-  );
-
-  // Rows heading to the result exit instantly; the result copy animates from
-  // here via the shared layoutId. Dropped rows fade and slide out.
-  const exitFor = (rid: number) =>
-    emittedIds.has(rid) ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, x: -48 };
+  // Keep the rows being checked in view as the trace advances.
+  useEffect(() => {
+    const first = trace.steps[stepIndex]?.ops.find((op) => op.type === "highlight")?.rowIds[0];
+    if (first === undefined) return;
+    list.current
+      ?.querySelector(`[data-rid="${first}"]`)
+      ?.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  }, [trace, stepIndex]);
 
   return (
-    <motion.div layoutScroll className="absolute inset-0 grid grid-cols-1 content-start gap-4 overflow-auto p-4 md:grid-cols-2">
-      <LayoutGroup>
-        <section aria-label={`${spec.table} table`} className="flex min-w-0 flex-col gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-            {spec.table} · {source.length} {source.length === 1 ? "row" : "rows"}
-          </h3>
-          {header}
-          <ul className="flex flex-col gap-1">
-            <AnimatePresence initial={false}>
-              {source.map((row) => (
-                <RowBar
-                  key={row.rid}
-                  row={row}
-                  columns={table.columns}
-                  visual={states.get(row.rid) ?? { status: "idle" }}
-                  focusColumn={focusColumn}
-                  gridTemplate={gridTemplate}
-                  exit={exitFor(row.rid)}
-                />
-              ))}
-            </AnimatePresence>
-          </ul>
-        </section>
-        <section aria-label="Result" className="flex min-w-0 flex-col gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-            result · {result.length} {result.length === 1 ? "row" : "rows"}
-          </h3>
-          {header}
-          <ul className="flex min-h-16 flex-col gap-1 rounded-md border border-dashed border-border p-1">
-            <AnimatePresence initial={false}>
-              {result.map((row) => (
-                <RowBar
-                  key={row.rid}
-                  row={row}
-                  columns={table.columns}
-                  visual={{ status: "emitted" }}
-                  focusColumn={focusColumn}
-                  gridTemplate={gridTemplate}
-                  exit={{ opacity: 0, transition: { duration: 0 } }}
-                />
-              ))}
-            </AnimatePresence>
-          </ul>
-        </section>
-      </LayoutGroup>
-    </motion.div>
+    <div ref={list} role="list" aria-label={`${spec.table} rows`}>
+      {table.rows.map((row, i) => {
+        const verdict = VERDICT[states.get(row.rid)?.status ?? "idle"];
+        const value = row.cells[focus];
+        const atBoundary = value === spec.threshold && (verdict === "kept" || verdict === "dropped");
+        return (
+          <LedgerRow
+            key={row.rid}
+            role="listitem"
+            data-rid={row.rid}
+            marker={i + 1}
+            verdict={verdict}
+            className="scroll-mb-48 scroll-mt-4"
+          >
+            <p className="flex flex-wrap items-baseline gap-x-3 font-mono">
+              <span className="ledger-struck text-base sm:text-lg">
+                {spec.column} {formatCell(value)}
+              </span>
+              {atBoundary && <MarginNote className="text-[22px]">exactly {formatNumber(spec.threshold)}</MarginNote>}
+            </p>
+            <p className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[13px] text-muted">
+              {table.columns.map((c, ci) =>
+                ci === focus ? null : (
+                  <span key={c}>
+                    {c} {formatCell(row.cells[ci])}
+                  </span>
+                ),
+              )}
+            </p>
+          </LedgerRow>
+        );
+      })}
+    </div>
   );
 }

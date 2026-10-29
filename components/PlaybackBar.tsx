@@ -1,19 +1,11 @@
 "use client";
 
 import { Pause, Play, StepBack, StepForward } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useId, type KeyboardEvent } from "react";
 import { advance, SPEEDS, usePlayback } from "@/store/playback";
 
-const iconButton =
-  "flex h-9 w-9 items-center justify-center rounded-md border border-border bg-panel text-text hover:bg-border disabled:opacity-40";
-
-function isTypingTarget(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
-  return (
-    el.isContentEditable ||
-    ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(el.tagName)
-  );
-}
+const square =
+  "flex h-11 w-11 shrink-0 items-center justify-center rounded-btn border border-ink disabled:cursor-not-allowed disabled:opacity-40";
 
 interface PlaybackBarProps {
   /** How long each step stays on screen at 1x, in ms. */
@@ -24,6 +16,7 @@ interface PlaybackBarProps {
 export function PlaybackBar({ durationFor, reducedMotion }: PlaybackBarProps) {
   const { stepIndex, totalSteps, playing, speed, toggle, stepBack, stepForward, seek, setSpeed } =
     usePlayback();
+  const hintId = useId();
 
   // Timer: one step per tick while playing.
   useEffect(() => {
@@ -32,51 +25,55 @@ export function PlaybackBar({ durationFor, reducedMotion }: PlaybackBarProps) {
     return () => window.clearTimeout(id);
   }, [playing, stepIndex, speed, durationFor]);
 
-  // Space toggles, arrows step. Native controls keep their own keys.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || isTypingTarget(e.target)) return;
-      if (e.key === " " && !reducedMotion) {
-        e.preventDefault();
-        toggle();
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        stepForward();
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        stepBack();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggle, stepForward, stepBack, reducedMotion]);
+  // Shortcuts live on the bar only (DESIGN.md), never on the whole page.
+  // Buttons keep native Space/Enter; the range keeps native arrows.
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const el = e.target as HTMLElement;
+    const isRange = el instanceof HTMLInputElement && el.type === "range";
+    if (e.key === " " && (el === e.currentTarget || isRange)) {
+      e.preventDefault();
+      if (!reducedMotion) toggle();
+    } else if (!isRange && e.key === "ArrowRight") {
+      e.preventDefault();
+      stepForward();
+    } else if (!isRange && e.key === "ArrowLeft") {
+      e.preventDefault();
+      stepBack();
+    }
+  };
 
   const disabled = totalSteps === 0;
   const atEnd = stepIndex >= totalSteps - 1;
 
   return (
-    <div className="flex flex-wrap items-center gap-3 border-t border-border bg-panel px-4 py-3">
+    <div
+      role="group"
+      aria-label="Playback controls"
+      aria-describedby={hintId}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      className="flex flex-wrap items-center gap-3 px-5 py-3"
+    >
       <div className="flex items-center gap-2">
-        <button type="button" className={iconButton} onClick={stepBack} disabled={disabled || stepIndex === 0} aria-label="Step back">
-          <StepBack size={16} />
+        <button type="button" className={`${square} bg-transparent text-ink`} onClick={stepBack} disabled={disabled || stepIndex === 0} aria-label="Step back">
+          <StepBack size={18} aria-hidden />
         </button>
         <button
           type="button"
-          className="flex h-9 w-9 items-center justify-center rounded-md bg-accent text-bg disabled:opacity-40"
+          className={`${square} bg-ink text-sheet`}
           onClick={toggle}
           disabled={disabled || reducedMotion}
           aria-label={playing ? "Pause" : atEnd ? "Replay" : "Play"}
-          title={reducedMotion ? "Autoplay is off because your system prefers reduced motion. Use the step buttons or arrow keys." : undefined}
         >
-          {playing ? <Pause size={16} /> : <Play size={16} />}
+          {playing ? <Pause size={18} aria-hidden /> : <Play size={18} aria-hidden />}
         </button>
-        <button type="button" className={iconButton} onClick={stepForward} disabled={disabled || atEnd} aria-label="Step forward">
-          <StepForward size={16} />
+        <button type="button" className={`${square} bg-transparent text-ink`} onClick={stepForward} disabled={disabled || atEnd} aria-label="Step forward">
+          <StepForward size={18} aria-hidden />
         </button>
       </div>
 
-      <label className="flex min-w-40 flex-1 items-center gap-3 text-xs text-text-secondary">
-        <span className="sr-only">Scrub through steps</span>
+      <label className="flex min-h-11 min-w-40 flex-1 items-center gap-3 text-sm text-muted">
+        <span className="sr-only">Step</span>
         <input
           type="range"
           min={0}
@@ -84,15 +81,15 @@ export function PlaybackBar({ durationFor, reducedMotion }: PlaybackBarProps) {
           value={stepIndex}
           onChange={(e) => seek(Number(e.target.value))}
           disabled={disabled}
-          className="w-full accent-accent"
+          className="h-11 w-full accent-ink"
           aria-valuetext={`Step ${stepIndex + 1} of ${totalSteps}`}
         />
-        <span className="shrink-0 tabular-nums" aria-hidden>
-          {totalSteps ? `${stepIndex + 1} / ${totalSteps}` : "–"}
+        <span className="shrink-0 font-mono tabular-nums" aria-hidden>
+          {totalSteps ? `${stepIndex + 1}/${totalSteps}` : "0/0"}
         </span>
       </label>
 
-      <div role="group" aria-label="Playback speed" className="flex rounded-md border border-border">
+      <div role="group" aria-label="Playback speed" className="flex">
         {SPEEDS.map((s) => (
           <button
             key={s}
@@ -100,19 +97,20 @@ export function PlaybackBar({ durationFor, reducedMotion }: PlaybackBarProps) {
             onClick={() => setSpeed(s)}
             aria-pressed={speed === s}
             className={[
-              "px-2.5 py-1.5 text-xs tabular-nums first:rounded-l-md last:rounded-r-md",
-              speed === s ? "bg-border font-semibold text-text" : "text-text-secondary hover:text-text",
+              "-ml-px min-h-11 min-w-11 border border-ink px-2 font-mono text-sm first:ml-0 first:rounded-l-btn last:rounded-r-btn",
+              speed === s ? "bg-ink text-sheet" : "bg-transparent text-ink hover:bg-wash",
             ].join(" ")}
           >
             {s}x
           </button>
         ))}
       </div>
-      {reducedMotion && (
-        <p className="w-full text-xs text-text-secondary">
-          Reduced motion is on: step through with ← and →.
-        </p>
-      )}
+
+      <p id={hintId} className="sr-only w-full text-[13px] text-muted sm:not-sr-only">
+        {reducedMotion
+          ? "Reduced motion is on, so it will not autoplay. Step with the buttons, or focus this bar and use the arrow keys."
+          : "Focus this bar: Space plays or pauses, arrow keys step."}
+      </p>
     </div>
   );
 }

@@ -23,24 +23,28 @@ interface FilterLessonState {
   /** Slots differ from what's on stage. */
   dirty: boolean;
   setSlot: <K extends keyof FilterSlots>(key: K, value: FilterSlots[K]) => void;
+  resetSlots: () => void;
   boot: () => Promise<void>;
   run: () => Promise<boolean>;
 }
 
 const slots = filterLesson.editableSlots;
 
+const defaultSlots = (): FilterSlots => ({
+  column: slots.column.default,
+  operator: slots.operator.default,
+  threshold: String(slots.threshold.default),
+});
+
 export const useFilterLesson = create<FilterLessonState>()((set, get) => ({
-  slots: {
-    column: slots.column.default,
-    operator: slots.operator.default,
-    threshold: String(slots.threshold.default),
-  },
+  slots: defaultSlots(),
   status: "booting",
   error: null,
   scene: null,
   result: null,
   dirty: false,
   setSlot: (key, value) => set((s) => ({ slots: { ...s.slots, [key]: value }, dirty: true })),
+  resetSlots: () => set({ slots: defaultSlots(), dirty: true, error: null }),
   boot: async () => {
     const error = await loadDataset(datasets[filterLesson.datasetId]);
     set(error ? { status: "error", error } : { status: "ready", error: null });

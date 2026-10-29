@@ -5,8 +5,3 @@ export function formatCell(value: unknown): string {
   }
   return String(value);
 }
-
-/** Okabe-Ito identity colour for a row (by rowid, so it never changes). */
-export function rowColor(rid: number): string {
-  return `var(--row-${(rid % 8) + 1})`;
-}

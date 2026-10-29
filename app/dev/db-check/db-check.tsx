@@ -39,7 +39,7 @@ export function DbCheck() {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-10 font-mono text-sm">
       <h1 className="mb-4 font-sans text-lg font-semibold">DuckDB-WASM check</h1>
-      <p className="mb-4 text-text-secondary">{SQL}</p>
+      <p className="mb-4 text-muted">{SQL}</p>
       {check.status === "running" ? (
         <p>Running…</p>
       ) : (
@@ -47,7 +47,7 @@ export function DbCheck() {
           <p data-testid="db-check-status" className="mb-2 font-semibold">
             {check.pass ? "PASS ✓" : "FAIL ✗"}
           </p>
-          <pre className="whitespace-pre-wrap text-text-secondary">{check.detail}</pre>
+          <pre className="whitespace-pre-wrap text-muted">{check.detail}</pre>
         </>
       )}
     </div>

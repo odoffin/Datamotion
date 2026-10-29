@@ -1,22 +1,22 @@
 "use client";
 
 import { LoaderCircle } from "lucide-react";
-import { MotionConfig } from "framer-motion";
 import { useCallback, useEffect, useId } from "react";
-import { filterLesson } from "@/content/lessons/filter";
+import { Button, Disclosure, LedgerSheet, MarginNote, Slip } from "@/components/ledger";
 import { PlaybackBar } from "@/components/PlaybackBar";
-import { ResultTable } from "@/components/ResultTable";
+import { ResultTable, resultCountText } from "@/components/ResultTable";
 import { SqlViewer } from "@/components/SqlViewer";
-import { FilterStage } from "@/components/stage/FilterStage";
+import { FilterStage, filterCountText } from "@/components/stage/FilterStage";
+import { filterLesson } from "@/content/lessons/filter";
 import { prefersReducedMotion, usePrefersReducedMotion } from "@/lib/hooks/use-prefers-reduced-motion";
 import { currentSql, useFilterLesson } from "@/store/filter-lesson";
 import { usePlayback } from "@/store/playback";
 
-const control =
-  "h-9 w-full rounded-md border border-border bg-bg px-2 font-mono text-sm text-text";
+const field =
+  "min-h-11 w-full rounded-none border-0 border-b-2 border-ink bg-transparent px-1 font-mono text-lg text-ink";
 
 export function FilterLesson() {
-  const { slots, status, error, scene, result, dirty, setSlot, boot, run } = useFilterLesson();
+  const { slots, status, error, scene, result, dirty, setSlot, resetSlots, boot, run } = useFilterLesson();
   const { stepIndex, reset } = usePlayback();
   const reducedMotion = usePrefersReducedMotion();
   const ids = { column: useId(), operator: useId(), threshold: useId(), error: useId() };
@@ -57,108 +57,131 @@ export function FilterLesson() {
         scene.table.rows.filter((r) => scene.trace.resultRowIds.includes(r.rid)).map((r) => r.cells),
       );
 
-  return (
-    <MotionConfig reducedMotion="user">
-      <div className="grid flex-1 grid-cols-1 lg:h-[calc(100dvh-3rem)] lg:grid-cols-[300px_minmax(0,1fr)_360px] lg:grid-rows-[minmax(0,1fr)]">
-        {/* Left: lesson text and controls */}
-        <aside className="flex flex-col gap-5 overflow-auto border-border p-5 lg:border-r">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Lesson</p>
-            <h1 className="text-xl font-semibold tracking-tight">{filterLesson.title}</h1>
-            <p className="text-sm leading-relaxed text-text-secondary">{filterLesson.explanation}</p>
-          </div>
+  const busy = status === "booting" || status === "running";
 
+  return (
+    <div className="mx-auto flex w-full max-w-[1440px] flex-wrap items-start gap-14 px-4 pb-24 pt-10 sm:px-14 sm:pt-14">
+      {/* Explanation */}
+      <section className="min-w-0 max-w-[520px] flex-[1_1_420px]">
+        <h1 className="font-serif text-[clamp(2.5rem,6vw,3.75rem)] font-semibold leading-[1.02] tracking-[-0.02em]">
+          {filterLesson.headline}
+        </h1>
+        <p className="mt-[22px] text-lg leading-relaxed">{filterLesson.explanation.short}</p>
+        <Disclosure>
+          {filterLesson.explanation.long.map((p) => (
+            <p key={p}>{p}</p>
+          ))}
+        </Disclosure>
+        <p className="mt-8 text-base leading-relaxed">
+          <strong>Your turn.</strong> Change the column, the comparison or the threshold on the slip, run it,
+          and watch which rows survive. Try the same number with &gt; and then &gt;=.
+        </p>
+      </section>
+
+      {/* Workspace */}
+      <section aria-label="Workspace" className="flex min-w-0 flex-[1.4_1_560px] flex-col gap-8">
+        <Slip>
           <form
-            className="flex flex-col gap-3"
             onSubmit={(e) => {
               e.preventDefault();
               void runAndPlay();
             }}
             aria-describedby={error ? ids.error : undefined}
           >
-            <div className="grid grid-cols-[1fr_auto] gap-2">
+            <p className="text-sm text-muted">Request slip. Build your query below.</p>
+            <div className="mt-4 grid grid-cols-[minmax(0,1fr)_5.5rem] gap-x-4 gap-y-4 sm:grid-cols-[minmax(0,1fr)_6rem_11rem]">
               <div className="flex flex-col gap-1">
-                <label htmlFor={ids.column} className="text-xs text-text-secondary">{s.column.label}</label>
-                <select id={ids.column} className={control} value={slots.column} onChange={(e) => setSlot("column", e.target.value)}>
+                <label htmlFor={ids.column} className="text-sm text-muted">{s.column.label}</label>
+                <select id={ids.column} className={field} value={slots.column} onChange={(e) => setSlot("column", e.target.value)}>
                   {s.column.options.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label htmlFor={ids.operator} className="text-xs text-text-secondary">{s.operator.label}</label>
-                <select id={ids.operator} className={`${control} w-20`} value={slots.operator} onChange={(e) => setSlot("operator", e.target.value)}>
+                <label htmlFor={ids.operator} className="text-sm text-muted">{s.operator.label}</label>
+                <select id={ids.operator} className={field} value={slots.operator} onChange={(e) => setSlot("operator", e.target.value)}>
                   {s.operator.options.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
+              <div className="col-span-2 flex flex-col gap-1 sm:col-span-1">
+                <label htmlFor={ids.threshold} className="text-sm text-muted">{s.threshold.label}</label>
+                <input
+                  id={ids.threshold}
+                  type="number"
+                  inputMode="decimal"
+                  step={s.threshold.step ?? "any"}
+                  className={field}
+                  value={slots.threshold}
+                  onChange={(e) => setSlot("threshold", e.target.value)}
+                  aria-invalid={sql === null}
+                />
+                <MarginNote aria-hidden className="mt-1 whitespace-nowrap text-right text-[22px]">
+                  watch the boundary
+                </MarginNote>
+              </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor={ids.threshold} className="text-xs text-text-secondary">{s.threshold.label}</label>
-              <input
-                id={ids.threshold}
-                type="number"
-                inputMode="decimal"
-                step={s.threshold.step ?? "any"}
-                className={control}
-                value={slots.threshold}
-                onChange={(e) => setSlot("threshold", e.target.value)}
-                aria-invalid={sql === null}
-              />
+
+            <div className="mt-6">
+              <SqlViewer value={sql ?? "-- Enter a number for the threshold"} label="SQL query (read-only)" />
+              <p className="mt-2 text-sm text-muted">
+                {dirty ? "Edited. Run it to see the new verdicts. " : ""}
+                The query is built from the choices above. Free typing arrives in the next version.
+              </p>
             </div>
-            <button
-              type="submit"
-              disabled={status !== "ready" || sql === null}
-              className="flex h-10 items-center justify-center gap-2 rounded-md bg-accent text-sm font-semibold text-bg disabled:opacity-50"
-            >
-              {(status === "booting" || status === "running") && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
-              {status === "booting" ? "Starting database…" : status === "running" ? "Running…" : "Run"}
-            </button>
+
             {error && (
-              <p id={ids.error} role="alert" className="text-sm text-text">
+              <p id={ids.error} role="alert" className="mt-4 text-base text-pen">
                 {error}
               </p>
             )}
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button type="submit" disabled={status !== "ready" || sql === null}>
+                {busy && <LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden />}
+                {status === "booting" ? "Starting the database" : status === "running" ? "Running" : "Run the query"}
+              </Button>
+              <Button variant="line" onClick={resetSlots} disabled={busy}>
+                Start over
+              </Button>
+            </div>
           </form>
+        </Slip>
 
-          <div className="flex flex-col gap-2">
-            <SqlViewer value={sql ?? "-- Enter a number for the threshold"} label="SQL query (read-only)" />
-            <p className="text-xs text-text-secondary">
-              {dirty ? "Edited. Press Run to see it play. " : ""}
-              The query is rebuilt from the controls above. Free-form editing arrives in a later version.
-            </p>
-          </div>
-        </aside>
-
-        {/* Centre: narration, stage, playback */}
-        <section aria-label="Animation" className="flex min-h-[32rem] min-w-0 flex-col bg-stage">
-          <div className="border-b border-border px-4 py-3">
-            <p className="text-xs tabular-nums text-text-secondary" aria-hidden>
-              {scene ? `Step ${stepIndex + 1} of ${scene.trace.steps.length}` : " "}
-            </p>
-            <p aria-live="polite" data-testid="narration" className="min-h-6 text-sm font-medium text-text">
-              {step?.narration ?? (status === "error" ? "" : "Loading the database…")}
-            </p>
-          </div>
-          <div className="relative min-h-[28rem] flex-1 lg:min-h-0">
-            {scene ? (
-              <FilterStage scene={scene} stepIndex={stepIndex} />
-            ) : (
-              <p className="p-4 text-sm text-text-secondary">
-                {status === "error" ? error : "Preparing the stage…"}
+        <LedgerSheet
+          aria-label="Animation"
+          title={filterLesson.table}
+          count={scene ? filterCountText(scene, stepIndex) : undefined}
+          footer={
+            <div className="sticky bottom-0 z-[2] border-t-2 border-ink bg-sheet">
+              <p className="hidden px-5 pt-3 text-sm text-muted sm:block" aria-hidden>
+                {scene ? `Step ${stepIndex + 1} of ${scene.trace.steps.length}` : " "}
               </p>
-            )}
-          </div>
-          <PlaybackBar durationFor={durationFor} reducedMotion={reducedMotion} />
-        </section>
+              <p aria-live="polite" data-testid="narration" className="min-h-[1.6em] px-5 pt-3 text-[15px] sm:pt-0 leading-relaxed">
+                {step?.narration ?? (status === "error" ? "" : "Starting the database. This takes a moment the first time.")}
+              </p>
+              <PlaybackBar durationFor={durationFor} reducedMotion={reducedMotion} />
+            </div>
+          }
+        >
+          {scene ? (
+            <FilterStage scene={scene} stepIndex={stepIndex} />
+          ) : (
+            <p className="py-6 pl-24 pr-5 text-muted">{status === "error" ? error : "Preparing the ledger."}</p>
+          )}
+        </LedgerSheet>
 
-        {/* Right: the real result from DuckDB */}
-        <aside aria-label="Real query result" className="flex min-h-0 flex-col gap-3 border-border p-5 lg:border-l">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Real result</h2>
+        <LedgerSheet
+          aria-label="Real query result"
+          title="Real result"
+          count={result ? resultCountText(result) : undefined}
+          margin={false}
+        >
           {result ? (
             <ResultTable result={result} matchesAnimation={matches} />
           ) : (
-            <p className="text-sm text-text-secondary">Run the query to see DuckDB&apos;s output.</p>
+            <p className="px-5 py-4 text-muted">Run the query to see what DuckDB returns.</p>
           )}
-        </aside>
-      </div>
-    </MotionConfig>
+        </LedgerSheet>
+      </section>
+    </div>
   );
 }
