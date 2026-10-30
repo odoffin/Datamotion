@@ -43,6 +43,8 @@ export interface Trace {
 
 export type SceneType =
   | "filter"
+  /** The statement changes data (sandbox lessons). */
+  | "change"
   | "sort"
   | "aggregate"
   | "join"

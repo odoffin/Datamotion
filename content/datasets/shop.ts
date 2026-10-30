@@ -105,8 +105,58 @@ const orders = defineTable({
   ],
 });
 
+// Some products have no reviews (LEFT JOIN, EXCEPT) and some reviews have no
+// comment (IS NULL, COUNT(column) versus COUNT(*)).
+const reviews = defineTable({
+  name: "reviews",
+  columns: [
+    { name: "id", type: "INTEGER" },
+    { name: "product_id", type: "INTEGER" },
+    { name: "rating", type: "INTEGER" },
+    { name: "comment", type: "VARCHAR" },
+    { name: "review_date", type: "DATE" },
+  ],
+  rows: [
+    [1, 2, 5, "Clicky and solid", "2026-01-10"],
+    [2, 4, 4, null, "2026-01-15"],
+    [3, 1, 3, "Battery dies fast", "2026-01-18"],
+    [4, 11, 5, "Great for long runs", "2026-01-22"],
+    [5, 6, 2, null, "2026-01-25"],
+    [6, 4, 5, "Worth every penny", "2026-02-01"],
+    [7, 7, 4, "Soft and warm", "2026-02-03"],
+    [8, 3, 3, null, "2026-02-06"],
+    [9, 13, 4, "Keeps water cold", "2026-02-09"],
+    [10, 12, 5, null, "2026-02-12"],
+    [11, 5, 2, "Too dim for reading", "2026-02-15"],
+    [12, 2, 4, "Keys feel great", "2026-02-20"],
+  ],
+});
+
+// Each employee's manager is another row of the same table (self-join); the
+// director has none (NULL).
+const employees = defineTable({
+  name: "employees",
+  columns: [
+    { name: "id", type: "INTEGER" },
+    { name: "name", type: "VARCHAR" },
+    { name: "role", type: "VARCHAR" },
+    { name: "manager_id", type: "INTEGER" },
+    { name: "city", type: "VARCHAR" },
+  ],
+  rows: [
+    [1, "Ngozi Eze", "Director", null, "Lagos"],
+    [2, "Tom Harris", "Store manager", 1, "Manchester"],
+    [3, "Aisha Bello", "Store manager", 1, "Abuja"],
+    [4, "Lucas Silva", "Sales assistant", 2, "Manchester"],
+    [5, "Mei Chen", "Sales assistant", 2, "Leeds"],
+    [6, "Femi Ade", "Sales assistant", 3, "Abuja"],
+    [7, "Sara Novak", "Warehouse lead", 1, "Lyon"],
+    [8, "Omar Haddad", "Packer", 7, "Lyon"],
+  ],
+});
+
 export const shop: Dataset = {
   id: "shop",
   title: "Shop",
-  tables: [customers, products, orders],
+  tables: [customers, products, orders, reviews, employees],
 };

@@ -115,7 +115,7 @@ describe("error pointing", () => {
     const d = await pointAt("SELECT id FROM sales", false);
     expect(d.word).toBe("sales");
     expect(d.message).toContain("no table called sales");
-    expect(d.hint).toBe("The tables that exist are customers, products and orders.");
+    expect(d.hint).toBe("The tables that exist are customers, products, orders, reviews and employees.");
   });
 
   it("the generic fallback says what to compare against", () => {

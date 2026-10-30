@@ -7,3 +7,4 @@ export { LedgerRow, type Verdict } from "./LedgerRow";
 export { LedgerSheet } from "./LedgerSheet";
 export { MarginNote } from "./MarginNote";
 export { Slip } from "./Slip";
+export { TabList, TabPanel, type TabItem } from "./Tabs";

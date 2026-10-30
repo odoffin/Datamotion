@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Clock, Eye, PenLine } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Breadcrumb, Button, ButtonLink, ConceptTags, Disclosure, LedgerSheet, MarginNote } from "@/components/ledger";
 import { chapterByNumber, chapterGroups, chapterOfLesson, chapters, type Chapter } from "@/content/chapters";
@@ -8,7 +9,7 @@ import { getLesson } from "@/content/lessons";
 import { chapterEntry, chapterStatus, countsLine, prerequisiteText, statusCounts, type ChapterStatus } from "@/lib/chapter-status";
 import { prefersReducedMotion } from "@/lib/hooks/use-prefers-reduced-motion";
 import { useProgressHydrated } from "@/lib/hooks/use-progress-hydrated";
-import { useProgress } from "@/store/progress";
+import { lessonProgress, useProgress } from "@/store/progress";
 
 const LEGEND: { status: ChapterStatus; meaning: string }[] = [
   { status: "done", meaning: "You finished every lesson in the chapter." },
@@ -261,9 +262,38 @@ function ChapterDetail({ chapter: c, hydrated }: { chapter: Chapter; hydrated: b
       {firstLesson && (
         <>
           <p className="mt-5 text-[15px] text-muted">
-            {c.lessonIds.length === 1 ? "1 lesson so far" : `${c.lessonIds.length} lessons so far`}: {firstLesson.title}.
+            {c.lessonIds.length === 1 ? "1 lesson" : `${c.lessonIds.length} lessons`}, in order. Open any of them.
           </p>
-          <ConceptTags concepts={firstLesson.concepts} className="mt-2.5" />
+          <ol className="mt-2 border-t border-rule" aria-label={`Lessons in ${c.name}`}>
+            {c.lessonIds.map((id, i) => {
+              const l = getLesson(id);
+              if (!l) return null;
+              const status = hydrated ? lessonProgress(progress, id).status : null;
+              const shown = status && status !== "not started" ? STATUS[status] : null;
+              return (
+                <li key={id} className="border-b border-rule">
+                  <Link
+                    href={`/lesson/${id}`}
+                    className="group grid min-h-11 grid-cols-[2rem_minmax(0,1fr)_auto] items-baseline gap-2 py-2.5 text-[15px] text-ink no-underline"
+                  >
+                    <span className="font-mono text-sm text-num">{i + 1}</span>
+                    <span className="group-hover:underline">{l.title}</span>
+                    {shown && status && (
+                      <span className={`inline-flex items-center gap-1.5 text-[13px] ${shown.className}`}>
+                        {shown.icon}
+                        {status}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+          <ConceptTags
+            concepts={[...new Set(c.lessonIds.flatMap((id) => getLesson(id)?.concepts ?? []))].slice(0, 8)}
+            className="mt-4"
+            label="Concepts in this chapter:"
+          />
         </>
       )}
 

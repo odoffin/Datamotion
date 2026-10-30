@@ -16,6 +16,9 @@ export const SQL_KEYWORDS = new Set([
   "left", "right", "full", "outer", "cross", "on", "as", "distinct", "with", "union",
   "all", "except", "intersect", "case", "when", "then", "else", "end", "asc", "desc",
   "true", "false", "using", "exists",
+  // Changing data and the rest of the course (chapters 9 to 12).
+  "create", "table", "insert", "into", "values", "update", "set", "delete", "alter", "drop",
+  "view", "index", "primary", "key", "references", "explain", "analyze", "over", "partition",
 ]);
 
 const OPERATORS = ["<=", ">=", "<>", "!=", "==", "||", "::", "=", "<", ">", "+", "-", "*", "/", "%"];

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BRAND_NAME, SOURCE_URL } from "@/lib/brand";
-import { demo } from "@/lib/landing";
+import { start } from "@/lib/landing";
 import { CAPTION, TEXT_LINK, WRAP } from "./layout";
 
 export function LandingHeader() {
@@ -23,7 +23,7 @@ export function LandingHeader() {
             </a>
           </li>
           <li>
-            <Link href={`/lesson/${demo.lessonId}`} className={`${TEXT_LINK} font-semibold text-ink`}>
+            <Link href={`/lesson/${start.lessonId}`} className={`${TEXT_LINK} font-semibold text-ink`}>
               Start learning
             </Link>
           </li>

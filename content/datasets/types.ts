@@ -1,9 +1,7 @@
 export type ColumnType = "INTEGER" | "DOUBLE" | "VARCHAR" | "DATE";
 
-/** Maps a declared SQL column type to the JS value stored in the dataset. */
-export type ValueOf<T extends ColumnType> = T extends "INTEGER" | "DOUBLE"
-  ? number
-  : string;
+/** Maps a declared SQL column type to the JS value stored in the dataset (null is SQL NULL). */
+export type ValueOf<T extends ColumnType> = (T extends "INTEGER" | "DOUBLE" ? number : string) | null;
 
 export interface ColumnDef<T extends ColumnType = ColumnType> {
   readonly name: string;

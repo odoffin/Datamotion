@@ -1,13 +1,8 @@
 import Link from "next/link";
 import { ButtonLink } from "@/components/ledger";
-import { capitalise, chapterCount, chapterLines, countWord, demo, lessonsReady, quizLength, readyLabel } from "@/lib/landing";
+import { capitalise, chapterCount, chapterLines, countWord, quizLength, readyLabel, readySentence, start } from "@/lib/landing";
 import { WRAP } from "./layout";
 import { PrimaryAction } from "./PrimaryAction";
-
-const readyLine =
-  lessonsReady === 1
-    ? "One lesson is ready to try today."
-    : `${capitalise(countWord(lessonsReady))} lessons are ready to try today.`;
 
 /** Every chapter from content/chapters.ts, with what is written so far. Nothing is locked. */
 export function StartAnywhere() {
@@ -22,11 +17,9 @@ export function StartAnywhere() {
             {capitalise(countWord(chapterCount))} chapters run from your first SELECT to database design. Begin at chapter 1, or
             take a {countWord(quizLength)}-question quiz and jump to where you belong. Nothing is locked.
           </p>
-          <p className="text-[15px] leading-[1.6] text-muted">
-            {readyLine} The rest are being written one chapter at a time.
-          </p>
+          <p className="text-[15px] leading-[1.6] text-muted">{readySentence()}</p>
           <div className="flex flex-wrap gap-3.5 pt-1.5">
-            <PrimaryAction startId={demo.lessonId} startLabel={`Start with ${demo.chapterName}`} />
+            <PrimaryAction startId={start.lessonId} startLabel={`Start with ${start.chapterName}`} />
             <ButtonLink href="/placement" variant="line">
               Find my level
             </ButtonLink>

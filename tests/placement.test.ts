@@ -59,11 +59,11 @@ describe("placement scoring", () => {
     expect(recommend(skipRest([])).chapter).toBe(1);
   });
 
-  it("says honestly when the recommended chapter has no lessons yet", () => {
+  it("does not warn about missing lessons now that every chapter has them", () => {
     const r = recommend(["correct", "correct", "wrong"]);
     expect(r.chapter).toBe(6);
-    expect(r.caveats.join(" ")).toContain("Chapter 6 has no lessons yet");
-    expect(r.caveats.join(" ")).toContain("Filtering (chapter 3)");
+    expect(r.caveats.join(" ")).not.toContain("has no lessons yet");
+    expect(r.caveats.join(" ")).toContain("chapters 3, 4 and 5 were not tested");
   });
 
   it("never gates: the last caveat always says every chapter is open", () => {

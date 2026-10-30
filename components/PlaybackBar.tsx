@@ -106,7 +106,7 @@ export function PlaybackBar({ durationFor, reducedMotion }: PlaybackBarProps) {
         ))}
       </div>
 
-      <p id={hintId} className="sr-only w-full text-[13px] text-muted sm:not-sr-only">
+      <p id={hintId} className="sr-only text-[13px] text-muted sm:not-sr-only sm:w-full">
         {reducedMotion
           ? "Reduced motion is on, so it will not autoplay. Step with the buttons, or focus this bar and use the arrow keys."
           : "Focus this bar: Space plays or pauses, arrow keys step."}

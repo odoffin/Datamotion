@@ -55,13 +55,21 @@ export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps)
   const focusName = table.columns[focus] ?? "";
   const list = useRef<HTMLDivElement>(null);
 
-  // Keep the rows being checked in view as the trace advances.
+  // Keep the rows being checked in view as the trace advances, scrolling only
+  // the ledger's own box ([data-ledger-scroll]) so the page never jumps.
   useEffect(() => {
-    const first = trace.steps[stepIndex]?.ops.find((op) => op.type === "highlight")?.rowIds[0];
-    if (first === undefined) return;
-    list.current
-      ?.querySelector(`[data-rid="${first}"]`)
-      ?.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    const ids = trace.steps[stepIndex]?.ops.find((op) => op.type === "highlight")?.rowIds;
+    if (!ids?.length) return;
+    const row = (rid: number) => list.current?.querySelector<HTMLElement>(`[data-rid="${rid}"]`);
+    const first = row(ids[0]!);
+    const last = row(ids[ids.length - 1]!);
+    const box = first?.closest<HTMLElement>("[data-ledger-scroll]");
+    if (!first || !last || !box) return;
+    const b = box.getBoundingClientRect();
+    // Bring the whole batch into the box, its first row at the top.
+    if (first.getBoundingClientRect().top < b.top || last.getBoundingClientRect().bottom > b.bottom) {
+      box.scrollBy({ top: first.getBoundingClientRect().top - b.top - 8, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    }
   }, [trace, stepIndex]);
 
   return (
@@ -78,7 +86,6 @@ export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps)
             data-rid={row.rid}
             marker={idColumn >= 0 ? formatCell(row.cells[idColumn]) : i + 1}
             verdict={verdict}
-            className="scroll-mt-4 [scroll-margin-bottom:calc(var(--playback-h,0px)+8px)]"
           >
             <p className="flex flex-wrap items-baseline gap-x-3 font-mono">
               <span className="ledger-struck whitespace-nowrap text-[15px] sm:text-lg">

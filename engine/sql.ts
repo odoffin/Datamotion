@@ -24,7 +24,8 @@ function tableStatements(table: TableDef): string[] {
     const values = table.rows
       .map((row) => {
         const cells = table.columns.map((col, i) => {
-          const v = row[i] as string | number;
+          const v = row[i] as string | number | null;
+          if (v === null) return "NULL";
           return col.type === "DATE"
             ? `DATE ${sqlLiteral(v)}`
             : sqlLiteral(v);

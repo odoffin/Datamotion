@@ -11,9 +11,15 @@ import { QUESTIONS } from "@/lib/placement";
  * product's own content so the page cannot drift from it.
  */
 
-/** The lesson the landing page demonstrates: the first one that is written. */
+/** The lesson the landing page demonstrates: Filtering, whose ledger animates row by row. */
+const demoLesson = getLesson("filter") ?? Object.values(lessons)[0]!;
+
+/** Where a new visitor starts: the first lesson of the first chapter that has one. */
 const firstChapter = chapters.find((c) => c.lessonIds.some((id) => getLesson(id)));
-const demoLesson = getLesson(firstChapter?.lessonIds[0] ?? "") ?? Object.values(lessons)[0]!;
+export const start = {
+  lessonId: firstChapter?.lessonIds.find((id) => getLesson(id)) ?? demoLesson.id,
+  chapterName: firstChapter?.name ?? demoLesson.title,
+};
 const dataset = datasets[demoLesson.datasetId];
 const table = dataset.tables.find((t) => t.name === demoLesson.table)!;
 
@@ -37,7 +43,6 @@ export interface DemoRow {
 
 export const demo = {
   lessonId: demoLesson.id,
-  chapterName: firstChapter?.name ?? demoLesson.title,
   table: table.name,
   ruleColumn: DEMO_RULE.column,
   /** The query the hero slip types: the lesson's goal. */
@@ -95,6 +100,13 @@ export const chapterLines: ChapterLine[] = chapters.map((c) => ({
 }));
 
 export const lessonsReady = chapterLines.reduce((sum, c) => sum + c.ready, 0);
+
+/** "Every chapter has lessons ready, 50 in all." or how many are ready while some are still being written. */
+export function readySentence(): string {
+  if (chapterLines.every((c) => c.ready > 0)) return `Every chapter has lessons ready, ${lessonsReady} in all.`;
+  const ready = lessonsReady === 1 ? "One lesson is" : `${capitalise(countWord(lessonsReady))} lessons are`;
+  return `${ready} ready to try today. The rest are being written one chapter at a time.`;
+}
 
 export function readyLabel(ready: number): string {
   return ready === 0 ? "being written" : `${ready} ${ready === 1 ? "lesson" : "lessons"} ready`;

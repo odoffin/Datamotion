@@ -22,6 +22,7 @@ export const filterLesson: LessonDefinition = {
     description: "List every order, with all its columns, whose amount is greater than 50.",
     referenceSql: "SELECT * FROM orders WHERE amount > 50",
     compare: "rows-any-order",
+    nudge: "Greater than 50 means 50 itself does not count.",
   },
   starterSql: "SELECT * FORM orders WHERE amount > 50",
   hints: [

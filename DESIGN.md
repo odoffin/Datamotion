@@ -36,10 +36,15 @@ Labels are sentence case, untracked, never capitals with letter spacing. No eyeb
 - Row states are never colour alone: kept = check icon + the word kept (green); dropped = x icon + the word dropped, struck-through amount, row nudged right and dimmed.
 - Buttons: solid (ink on sheet) and line (outlined). Min height 44px. Visible focus ring: 2px ink, 3px offset.
 - Long explanations are hidden behind "Read the long version", never a wall of text on first view.
+- Read it (workbench tab): the learner's last query in the order the database runs it. One ruled line per step, a red-pen margin word (first, then, last), the clause in mono, one plain sentence, rows in and out, and a figure where it helps: real rows with their verdicts under WHERE, row matches under JOIN (never Venn circles). Opens by itself after a run the animation can only simplify.
+- Guess first: an optional row-count guess on the slip before running; afterwards "You guessed N. It returned M." with a way into Read it.
+- Parsons puzzle: one answer's lines, shuffled, tapped back into written order with buttons (no dragging). Offered once a hint is out, and as "Rebuild it from memory" after the code fades.
 
 ## Motion
 Shake: 0.45s, translateX +-6px, alternating two keyframe names so it replays each failed run.
 Fade away: opacity, blur 8px, translateY -10px and max-height to 0 over 0.9s, then visibility hidden.
+The snap: after "I've got it", the code first turns to dust and drifts away (lib/dust.ts), then the slip fades; "Bring my code back" plays the dust in reverse.
+Scroll: Lenis smooth scrolling (off with reduced motion; inner scroll boxes opt out with data-lenis-prevent).
 Rows: opacity and transform only (never animate width, height, top or left). No `transition: all`.
 Every animation has a prefers-reduced-motion fallback (no motion, state changes instantly).
 

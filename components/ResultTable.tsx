@@ -13,10 +13,12 @@ interface ResultTableProps {
   result: RunQueryResult;
   /** A verdict line above the rows, e.g. whether they meet the goal. */
   verdict?: ResultVerdict | null;
+  /** Height limit of the scrolling rows. */
+  scrollClassName?: string;
 }
 
 /** DuckDB's actual output for the learner's query. */
-export function ResultTable({ result, verdict }: ResultTableProps) {
+export function ResultTable({ result, verdict, scrollClassName = "max-h-[28rem]" }: ResultTableProps) {
   if (result.error) {
     return (
       <p role="alert" className="px-5 py-4 text-base text-pen">
@@ -39,7 +41,7 @@ export function ResultTable({ result, verdict }: ResultTableProps) {
         </p>
       )}
       {/* Rows from an older query stay readable but visibly out of date. */}
-      <div className={`max-h-[28rem] overflow-auto border-t border-rule ${verdict?.tone === "stale" ? "opacity-60" : ""}`}>
+      <div data-lenis-prevent className={`${scrollClassName} overflow-auto border-t border-rule ${verdict?.tone === "stale" ? "opacity-60" : ""}`}>
         <table className="w-full border-collapse font-mono text-sm">
           <thead className="sticky top-0 bg-sheet">
             <tr>
@@ -54,7 +56,7 @@ export function ResultTable({ result, verdict }: ResultTableProps) {
             {result.rows.map((row, r) => (
               <tr key={r} className="border-b border-rule">
                 {row.map((cell, c) => (
-                  <td key={c} className="whitespace-nowrap px-5 py-2 tabular-nums">
+                  <td key={c} className="whitespace-pre px-5 py-2 align-top tabular-nums">
                     {formatCell(cell)}
                   </td>
                 ))}

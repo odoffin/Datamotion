@@ -7,11 +7,11 @@ const TYPE_WORDS: Record<ColumnType, string> = {
   DATE: "date",
 };
 
-/** The table's columns and types, kept in view next to the editor. */
-export function SchemaCard({ table }: { table: TableDef }) {
+/** The table's columns and types, one click from the editor. `framed` draws its own sheet. */
+export function SchemaCard({ table, framed = true }: { table: TableDef; framed?: boolean }) {
   return (
-    <section aria-labelledby={`schema-${table.name}`} className="min-w-0 border border-ink bg-sheet">
-      <h2 id={`schema-${table.name}`} className="border-b-2 border-ink px-4 py-2.5 text-[15px]">
+    <section aria-labelledby={`schema-${table.name}`} className={`min-w-0 ${framed ? "border border-ink bg-sheet" : ""}`}>
+      <h2 id={`schema-${table.name}`} className={`px-4 py-2.5 text-[15px] ${framed ? "border-b-2 border-ink" : "border-b border-rule"}`}>
         <span className="font-serif text-lg font-semibold">{table.name}</span>
         <span className="text-muted"> columns</span>
       </h2>

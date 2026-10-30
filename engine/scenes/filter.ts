@@ -313,6 +313,29 @@ export async function idleScene(
   };
 }
 
+/** Sandbox lessons: the ledger shows a table as it is (before a run, or afterwards), with no verdicts. */
+export const CHANGED_LABEL = "This statement changes data, so the ledger shows the table afterwards, not a step-by-step animation";
+
+export function tableScene(
+  name: string,
+  sql: string,
+  result: { columns: string[]; rows: unknown[][] },
+  narration: string,
+  banner: string | null,
+  focus: string | null = null,
+): FilterScene {
+  return {
+    mode: sql ? "simplified" : "idle",
+    sql,
+    table: { name, columns: result.columns, rows: result.rows.map((cells, i) => ({ rid: i, cells })) },
+    trace: { steps: [{ id: "table", narration, ops: [] }], resultColumns: result.columns, resultRowIds: [] },
+    focusColumn: focus && result.columns.includes(focus) ? focus : null,
+    boundaryValues: [],
+    verdicts: false,
+    banner,
+  };
+}
+
 /** Before any query has run: the same table, no verdicts, focus kept. */
 export function asIdle(scene: FilterScene): FilterScene {
   return {

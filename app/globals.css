@@ -110,6 +110,9 @@ body {
     max-height 0.9s ease, visibility 0s linear 0.9s;
 }
 
+/* The snap (lib/dust.ts): while the code is dust, the editor's own text is hidden. */
+[data-snapping] .cm-content, [data-snapping] .cm-cursorLayer { opacity: 0; }
+
 .ledger-line { transition: opacity 0.6s ease, transform 0.6s ease; }
 .ledger-line[data-verdict="dropped"] { opacity: 0.55; transform: translateX(8px); }
 .ledger-line[data-verdict="dropped"] .ledger-struck {

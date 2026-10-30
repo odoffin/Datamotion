@@ -2,12 +2,15 @@ import { align, keywordTypo, lex, normToken, type AlignOp, type Alignment, type 
 import type { QueryResult, QueryRunner } from "./query-runner";
 import { friendlyError, guardReadOnly } from "./sql-guard";
 
-export type CompareMode = "rows-any-order" | "rows-ordered";
+/** "explain": a sandbox lesson whose query must be EXPLAINed; the query itself is compared. */
+export type CompareMode = "rows-any-order" | "rows-ordered" | "explain";
 
 export interface LessonGoal {
   description: string;
   referenceSql: string;
   compare: CompareMode;
+  /** Said after a wrong result when no sharper hint applies; defaults to the lesson's first (mildest) hint. Never the answer. */
+  nudge?: string;
 }
 
 /** A DuckDB error with the character offset it points at, when known. */
@@ -294,7 +297,8 @@ export type CheckReason =
   | "extra column"
   | "wrong row count"
   | "rows differ"
-  | "wrong order";
+  | "wrong order"
+  | "not explained";
 
 export type CheckResult =
   | { ok: true; learner: QueryResult }
@@ -367,7 +371,16 @@ export async function checkAnswer(
   }
   const reference = await runner.run(lesson.goal.referenceSql);
   if (reference.error) throw new Error(`Reference query failed: ${reference.error}`);
+  return compareResults(sql, learner, reference, lesson);
+}
 
+/** Compares two results the way every lesson is judged: same columns, same rows (in order if the goal says so). */
+export function compareResults(
+  sql: string,
+  learner: QueryResult,
+  reference: QueryResult,
+  lesson: { goal: LessonGoal; hints?: readonly string[] },
+): CheckResult {
   const lc = learner.columns.map((c) => c.toLowerCase());
   const rc = reference.columns.map((c) => c.toLowerCase());
   const missing = rc.filter((c) => !lc.includes(c));
@@ -395,7 +408,7 @@ export async function checkAnswer(
   const extraRows = difference(rows, reference.rows);
   const missingRows = difference(reference.rows, rows);
   const boundary = boundaryHint(sql, reference.columns, [...extraRows, ...missingRows]);
-  const fallback = lesson.hints?.[lesson.hints.length - 1] ?? "Compare your rule with the goal once more.";
+  const fallback = lesson.goal.nudge ?? lesson.hints?.[0] ?? "Compare your rule with the goal once more.";
 
   if (rows.length !== reference.rows.length) {
     const n = rows.length;

@@ -9,13 +9,13 @@ import { PenCircle, PenUnderline } from "@/components/landing/Pen";
 import { PrimaryAction } from "@/components/landing/PrimaryAction";
 import { StartAnywhere } from "@/components/landing/StartAnywhere";
 import { BRAND_NAME } from "@/lib/brand";
-import { demo } from "@/lib/landing";
+import { start } from "@/lib/landing";
 
 const PITCH = `${BRAND_NAME} teaches SQL by running your own code on real data, one row at a time. You type every line yourself, so it sticks.`;
 
 export const metadata: Metadata = { description: PITCH };
 
-const startLabel = `Start with ${demo.chapterName}`;
+const startLabel = `Start with ${start.chapterName}`;
 
 export default function Home() {
   return (
@@ -31,7 +31,7 @@ export default function Home() {
             </h1>
             <p className="max-w-[34em] text-[19px] leading-[1.6] text-muted">{PITCH}</p>
             <div className="flex flex-wrap gap-3.5">
-              <PrimaryAction startId={demo.lessonId} startLabel={startLabel} />
+              <PrimaryAction startId={start.lessonId} startLabel={startLabel} />
               <ButtonLink href="/placement" variant="line">
                 Find my level
               </ButtonLink>
@@ -55,7 +55,7 @@ export default function Home() {
             <div className="flex flex-col gap-6">
               <p className="max-w-[26em] text-xl leading-[1.6]">Fix one broken query and watch the rows answer.</p>
               <div className="flex flex-wrap gap-3.5">
-                <PrimaryAction startId={demo.lessonId} startLabel={startLabel} variant="solid-inverse" />
+                <PrimaryAction startId={start.lessonId} startLabel={startLabel} variant="solid-inverse" />
                 <ButtonLink href="/placement" variant="line-inverse">
                   Find my level
                 </ButtonLink>

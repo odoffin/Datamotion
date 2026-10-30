@@ -1,5 +1,6 @@
 import type { DatasetId } from "@/content/datasets";
 import type { LessonGoal } from "@/engine/check";
+import type { SandboxSpec } from "@/engine/sandbox";
 import type { SceneType } from "@/engine/trace";
 
 export interface LessonDefinition {
@@ -20,6 +21,13 @@ export interface LessonDefinition {
   goal: LessonGoal;
   /** What the slip starts with (may contain a deliberate mistake). */
   starterSql: string;
+  /** "Your turn" line on the slip: what to do with the starter query. Defaults to fixing a typo. */
+  task?: string;
+  /**
+   * Lessons that change data run in the scratch sandbox: each attempt runs on a
+   * fresh copy inside a transaction that is rolled back, and `check` is compared.
+   */
+  sandbox?: SandboxSpec;
   /** Gentle nudges that never give the answer away, mildest first. */
   hints: string[];
   nextLessonId?: string;
