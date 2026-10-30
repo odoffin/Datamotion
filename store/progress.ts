@@ -17,7 +17,7 @@ export interface LessonProgress {
   /** mastered, or revealed if the answer was shown first (never upgraded by luck). */
   completion: Completion | null;
   hintsUsed: number;
-  /** ISO time the lesson was finished (the code faded), if it is done. */
+  /** ISO time the lesson was finished (first approved), if it is done. */
   finishedAt: string | null;
 }
 
@@ -44,7 +44,7 @@ interface ProgressActions {
   recordAttempt: (id: string) => void;
   recordHint: (id: string) => void;
   recordApproved: (id: string, completion: Completion) => void;
-  /** Finishing (the fade). Stays done: bringing the code back to look again does not undo it. */
+  /** Finishing (the first approval). Stays done: doing the lesson again does not undo it. */
   markDone: (id: string, at?: Date) => void;
   savePlacement: (answers: Answer[], recommended: number, known: number[], at?: Date) => void;
   reset: () => void;

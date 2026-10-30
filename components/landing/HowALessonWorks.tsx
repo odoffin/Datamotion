@@ -88,17 +88,15 @@ function SeeItRun() {
   );
 }
 
-function ThenItFades() {
+function ThenMoveOn() {
   return (
     <Slip>
-      <p className={CAPTION}>Your turn. Write it from memory.</p>
-      <p aria-hidden className={`${CODE} mt-2.5 opacity-[0.18] blur-[1.5px]`}>
-        <Sql sql={demo.sql} />
-      </p>
+      <p className="font-serif text-2xl font-semibold text-good">Approved.</p>
+      <p className="mt-1.5 text-[15px] leading-normal">Move on when you feel sure of it, or do it again to practise.</p>
       {/* Pictures of the lesson's buttons, not controls. */}
       <div aria-hidden className="pointer-events-none mt-4 flex select-none flex-wrap gap-2.5">
-        <span className={buttonClass("solid")}>Run the query</span>
-        <span className={buttonClass("line")}>Bring my code back</span>
+        <span className={buttonClass("solid")}>Next lesson</span>
+        <span className={buttonClass("line")}>Do it again</span>
       </div>
     </Slip>
   );
@@ -131,10 +129,10 @@ const ENTRIES: Entry[] = [
     slip: <SeeItRun />,
   },
   {
-    note: "then it fades",
-    title: "When you have it, the code fades.",
-    body: "Once you are comfortable, fade the code and write it again from memory. “Bring my code back” is always one click away, and no chapter is ever locked.",
-    slip: <ThenItFades />,
+    note: "then move on",
+    title: "When you have it, move on.",
+    body: "Once your query is approved, finish one sentence about it to check you understood. Then go on to the next lesson, or do it again from the start. No chapter is ever locked.",
+    slip: <ThenMoveOn />,
   },
 ];
 

@@ -71,7 +71,7 @@ export function QueryEditor({ value, onChange, onRun, label, describedBy }: Quer
           theme,
           syntaxHighlighting(ledgerSqlHighlight),
           EditorView.lineWrapping,
-          placeholder("SELECT * FROM orders"),
+          placeholder("SELECT * FROM orders;"),
           EditorView.contentAttributes.of({
             "aria-label": label,
             "aria-multiline": "true",

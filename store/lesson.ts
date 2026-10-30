@@ -6,6 +6,7 @@ import { checkAnswer, diagnose, parseCheck, runtimeError, type CheckReason, type
 import { lex } from "@/engine/lex";
 import type { QueryRunner } from "@/engine/query-runner";
 import { explainSql, type Explanation } from "@/engine/explain";
+import { formatSql } from "@/engine/format";
 import { checkSandboxAnswer } from "@/engine/sandbox";
 import { asIdle, buildLearnerScene, CHANGED_LABEL, checkerOffScene, idleScene, tableScene, type FilterScene } from "@/engine/scenes/filter";
 import { quoteIdent } from "@/engine/sql";
@@ -52,23 +53,16 @@ interface LessonState {
   idle: FilterScene | null;
   /** The learner's own rows from DuckDB, whenever their query ran. */
   result: RunQueryResult | null;
-  faded: boolean;
   /** "Read it": the last query that ran, read back in run order. */
   explained: { sql: string; explanation: Explanation } | null;
-  /** Predict before you run: the learner's guess at how many rows come back. */
-  guess: number | null;
-  /** The first result after a guess: what was guessed and what came back. */
-  guessed: { guess: number; actual: number } | null;
   open: (lesson: LessonDefinition) => Promise<void>;
   setSql: (sql: string) => void;
   startOver: () => void;
   run: () => Promise<Outcome>;
   showHint: () => void;
   showAnswer: () => void;
-  fade: () => void;
-  bringBack: () => void;
-  setGuess: (guess: number | null) => void;
-  guessAgain: () => void;
+  /** Do it again: the starter slip back, the verdicts cleared. The lesson stays done. */
+  redo: () => void;
 }
 
 function sceneOptions(lesson: LessonDefinition, parser: QueryRunner) {
@@ -81,7 +75,7 @@ function sceneOptions(lesson: LessonDefinition, parser: QueryRunner) {
 }
 
 /** Names the lesson itself uses (tables it creates, aliases), so the red pen never mistakes them for typos. */
-function lessonIdentifiers(lesson: LessonDefinition): string[] {
+export function lessonIdentifiers(lesson: LessonDefinition): string[] {
   const own = lex(lesson.goal.referenceSql).filter((t) => t.kind === "word").map((t) => t.text);
   return [...datasetIdentifiers(datasets[lesson.datasetId]), ...own];
 }
@@ -94,6 +88,11 @@ async function sandboxIdle(lesson: LessonDefinition): Promise<FilterScene> {
   return ran.ok && !ran.result.error
     ? tableScene(lesson.table, "", ran.result, `The ${lesson.table} table before your change.`, null, lesson.sandbox?.focus)
     : tableScene(lesson.table, "", { columns: [], rows: [] }, `There is no ${lesson.table} table yet: your statement creates it.`, null);
+}
+
+/** The slip starts in the house style: one clause per line, keywords in capitals. */
+export function starterText(lesson: LessonDefinition): string {
+  return formatSql(lesson.starterSql, lessonIdentifiers(lesson));
 }
 
 const OFFLINE_HELP =
@@ -110,9 +109,6 @@ export const useLesson = create<LessonState>()((set, get) => {
     });
     if (get().lastRunSql === sql) set({ explained: { sql, explanation } });
   };
-  /** A guess is compared with the first result that comes back after it. */
-  const settleGuess = (actual: number) =>
-    set((s) => (s.guess !== null && !s.guessed ? { guessed: { guess: s.guess, actual } } : {}));
 
   return {
     lesson: null,
@@ -129,17 +125,14 @@ export const useLesson = create<LessonState>()((set, get) => {
     scene: null,
     idle: null,
     result: null,
-    faded: false,
     explained: null,
-    guess: null,
-    guessed: null,
 
     open: async (lesson) => {
       whenProgressReady((p) => p.openLesson(lesson.id));
       if (get().lesson?.id !== lesson.id) {
         set({
           lesson,
-          sql: lesson.starterSql,
+          sql: starterText(lesson),
           status: "booting",
           fatal: null,
           outcome: { kind: "idle" },
@@ -151,10 +144,7 @@ export const useLesson = create<LessonState>()((set, get) => {
           scene: null,
           idle: null,
           result: null,
-          faded: false,
           explained: null,
-          guess: null,
-          guessed: null,
         });
       }
       const error = await loadDataset(datasets[lesson.datasetId]);
@@ -201,7 +191,7 @@ export const useLesson = create<LessonState>()((set, get) => {
     // Only the text is reset (the editor records it, so it can be undone).
     startOver: () => {
       const lesson = get().lesson;
-      if (lesson) set({ sql: lesson.starterSql });
+      if (lesson) set({ sql: starterText(lesson) });
     },
 
     showHint: () => {
@@ -253,7 +243,11 @@ export const useLesson = create<LessonState>()((set, get) => {
         const outcome: Outcome = { kind: "approved" };
         const completion = completionFor(get().answerShown);
         set({ status: "ready", outcome, result: check.learner, completion });
-        whenProgressReady((p) => p.recordApproved(lesson.id, completion));
+        // Approval finishes the lesson; doing it again later never undoes that.
+        whenProgressReady((p) => {
+          p.recordApproved(lesson.id, completion);
+          p.markDone(lesson.id);
+        });
         return outcome;
       }
 
@@ -284,7 +278,6 @@ export const useLesson = create<LessonState>()((set, get) => {
         scene = checkerOffScene(idle, sql);
       }
       set({ scene });
-      settleGuess(check.learner.rows.length);
       void readBack(lesson, sql, check.learner);
 
       if (!check.ok) return fail({ kind: "wrong", reason: check.reason, hint: check.hint }, check.learner);
@@ -292,19 +285,28 @@ export const useLesson = create<LessonState>()((set, get) => {
       const outcome: Outcome = { kind: "approved" };
       const completion = completionFor(get().answerShown);
       set({ status: "ready", outcome, result: check.learner, completion });
-      whenProgressReady((p) => p.recordApproved(lesson.id, completion));
+      // Approval finishes the lesson; doing it again later never undoes that.
+      whenProgressReady((p) => {
+        p.recordApproved(lesson.id, completion);
+        p.markDone(lesson.id);
+      });
       return outcome;
     },
 
-    // Finishing is the fade: it marks the lesson done. Bringing the code back is
-    // for looking again; the lesson stays done.
-    fade: () => {
-      const lesson = get().lesson;
-      set({ faded: true });
-      if (lesson) whenProgressReady((p) => p.markDone(lesson.id));
+    redo: () => {
+      const { lesson, idle } = get();
+      if (!lesson) return;
+      set({
+        sql: starterText(lesson),
+        outcome: { kind: "idle" },
+        attempt: 0,
+        lastRunSql: null,
+        hintsShown: 0,
+        answerShown: false,
+        scene: idle,
+        result: null,
+        explained: null,
+      });
     },
-    bringBack: () => set({ faded: false }),
-    setGuess: (guess) => set({ guess }),
-    guessAgain: () => set({ guess: null, guessed: null }),
   };
 });

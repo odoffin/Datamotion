@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { shop } from "@/content/datasets/shop";
 import { lessonOrder, lessons } from "@/content/lessons";
 import { inWrittenOrder, puzzleLines, splitClauses } from "@/engine/clauses";
+import { explainBack } from "@/engine/explain-back";
 import { explainSql, type Explanation, type MatchFigure, type VerdictFigure } from "@/engine/explain";
 import type { QueryRunner } from "@/engine/query-runner";
 import { createNodeRunner } from "./node-runner";
@@ -52,7 +53,7 @@ describe("explainSql", () => {
     expect(await sentence("category IN ('Home', 'Office')")).toBe("Keep a row only if category is one of 'Home' or 'Office'.");
     expect(await sentence("price > 100 OR price < 10")).toBe("Keep a row only if price is more than 100, or price is less than 10.");
     expect(await sentence("price >= 10 AND (category = 'Home' OR category = 'Office')")).toBe(
-      "Keep a row only if price is at least 10, and either category is 'Home', or category is 'Office'.",
+      "Keep a row only if price is at least 10, and either category is the text 'Home', or category is the text 'Office'.",
     );
     expect(step(await read("SELECT * FROM reviews WHERE comment IS NULL"), "WHERE").sentence).toBe(
       "Keep a row only if comment is missing (NULL).",
@@ -64,12 +65,12 @@ describe("explainSql", () => {
     expect(e.steps.map((s) => s.sql.split(" ")[0])).toEqual(["FROM", "GROUP", "HAVING", "SELECT"]);
     expect(step(e, "GROUP").count).toBe("40 rows in, 12 groups");
     expect(step(e, "HAVING").sentence).toBe("Keep a group only if its number of rows is at least 4.");
-    expect(step(e, "SELECT").sentence).toBe("Show customer_id and the number of rows in each group (as orders).");
+    expect(step(e, "SELECT").sentence).toBe("Show customer_id and the number of rows in each group (called orders).");
   });
 
   it("says when a total turns every row into one", async () => {
     const e = await read("SELECT SUM(amount) AS total FROM orders");
-    expect(step(e, "SELECT").sentence).toBe("Turn all the rows into one row, showing the total of amount (as total).");
+    expect(step(e, "SELECT").sentence).toBe("Turn all the rows into one row, showing the total of amount (called total).");
     expect(step(e, "SELECT").count).toBe("40 rows in, 1 out, 1 column each");
   });
 
@@ -163,5 +164,125 @@ describe("puzzleLines and inWrittenOrder", () => {
     expect(inWrittenOrder(lines, [1, 0, 2, 3])).toBe(false);
     const chained = puzzleLines("SELECT 1 FROM a JOIN b ON a.id = b.a_id JOIN c ON b.id = c.b_id")!;
     expect(inWrittenOrder(chained, [0, 1, 3, 2])).toBe(false);
+  });
+});
+
+describe("step tables and dragging", () => {
+  const fill = (parts: string[], values: number[]) => parts.reduce((t, p, i) => t + p + (i < values.length ? values[i] : ""), "");
+
+  it("gives every step of a SELECT a table that runs, joined columns named by their table", async () => {
+    for (const id of lessonOrder) {
+      const l = lessons[id]!;
+      if (l.sandbox) continue;
+      const e = await read(l.goal.referenceSql);
+      for (const s of e.steps) {
+        expect(s.table, `${id}: ${s.sql}`).toBeTruthy();
+        const res = await runner.run(s.table!);
+        expect(res.error, `${id}: ${s.table}`).toBeUndefined();
+      }
+    }
+    const join = step(await read("SELECT o.id FROM orders o JOIN customers c ON o.customer_id = c.id"), "JOIN");
+    expect((await runner.run(join.table!)).columns).toContain("c.name");
+  });
+
+  it("drags a WHERE number: the learner's own value gives the real count, 49 keeps the 50s", async () => {
+    const where = step(await read("SELECT * FROM orders WHERE amount > 50"), "WHERE");
+    const tweak = where.tweak!;
+    expect(tweak.parts).toEqual(["WHERE amount > ", ""]);
+    expect(tweak.numbers[0]).toMatchObject({ value: 50, min: 0, step: 1 });
+    const kept = async (n: number) => (await runner.run(fill(tweak.query, [n]))).rows.filter((r) => r[0] === true).length;
+    expect(await kept(50)).toBe(17);
+    expect(await kept(49)).toBeGreaterThan(17);
+  });
+
+  it("drags BETWEEN's two ends, HAVING's count and LIMIT's size", async () => {
+    const between = step(await read("SELECT * FROM products WHERE price BETWEEN 25 AND 50"), "WHERE").tweak!;
+    expect(between.numbers.map((n) => n.value)).toEqual([25, 50]);
+    const having = step(await read("SELECT customer_id, COUNT(*) FROM orders GROUP BY customer_id HAVING COUNT(*) >= 4"), "HAVING").tweak!;
+    expect(having.noun).toBe("group");
+    expect((await runner.run(fill(having.query, [4]))).rows.filter((r) => r[0] === true)).toHaveLength(4);
+    const limit = step(await read("SELECT * FROM orders ORDER BY id LIMIT 5"), "LIMIT").tweak!;
+    expect((await runner.run(fill(limit.query, [7]))).rows.filter((r) => r[0] === true)).toHaveLength(7);
+  });
+
+  it("does not offer a slider for text tests", async () => {
+    expect(step(await read("SELECT * FROM customers WHERE city = 'Lagos'"), "WHERE").tweak).toBeUndefined();
+  });
+});
+
+describe("explainBack", () => {
+  it("asks something about every lesson, with three different endings and one right answer", async () => {
+    for (const id of lessonOrder) {
+      const l = lessons[id]!;
+      const q = explainBack(l.goal.referenceSql, id, l.sandbox ? null : await runner.run(l.goal.referenceSql));
+      expect(q, id).not.toBeNull();
+      expect(new Set(q!.options).size, id).toBe(3);
+      expect(q!.answer, id).toBeGreaterThanOrEqual(0);
+      expect(q!.why.length, id).toBeGreaterThan(10);
+    }
+  });
+
+  it("builds near misses from the learner's own test", () => {
+    const q = explainBack("SELECT * FROM orders WHERE amount > 50", "filter")!;
+    expect(q.prompt).toBe("Your query keeps a row only if");
+    expect(q.options[q.answer]).toBe("amount is more than 50");
+    expect([...q.options].sort()).toEqual(["amount is at least 50", "amount is less than 50", "amount is more than 50"]);
+  });
+
+  it("tests the boundary of a CASE label", () => {
+    const q = explainBack("SELECT id, CASE WHEN amount > 100 THEN 'large' ELSE 'small' END AS size FROM orders", "case")!;
+    expect(q.prompt).toBe("A row whose amount is exactly 100 gets the label");
+    expect(q.options[q.answer]).toBe("'small'");
+  });
+
+  it("knows what each join keeps", () => {
+    const inner = explainBack("SELECT * FROM orders JOIN customers ON orders.customer_id = customers.id", "x")!;
+    expect(inner.options[inner.answer]).toBe("is left out of the result");
+    const left = explainBack("SELECT * FROM products LEFT JOIN reviews ON reviews.product_id = products.id", "x")!;
+    expect(left.options[left.answer]).toBe("stays, with NULL in the reviews columns");
+  });
+
+  it("shuffles the same way for the same lesson, and never throws", () => {
+    expect(explainBack("SELECT * FROM orders WHERE amount > 50", "a")).toEqual(explainBack("SELECT * FROM orders WHERE amount > 50", "a"));
+    for (const sql of ["", "SELECT (", "WHERE", "SELECT * FORM orders"]) expect(() => explainBack(sql, "x")).not.toThrow();
+  });
+});
+
+describe("Watch it run views", () => {
+  it("gives every step of every query lesson a view that runs, a label and its row count", async () => {
+    for (const id of lessonOrder) {
+      const l = lessons[id]!;
+      if (l.sandbox) continue;
+      const e = await read(l.goal.referenceSql);
+      for (const s of e.steps) {
+        expect(s.label, `${id}: ${s.sql}`).toBeTruthy();
+        expect(s.view, `${id}: ${s.sql}`).toBeTruthy();
+        const res = await runner.run(s.view!);
+        expect(res.error, `${id}: ${s.view}`).toBeUndefined();
+        expect(typeof s.rows, `${id}: ${s.sql}`).toBe("number");
+      }
+    }
+  });
+
+  it("marks the rows WHERE, HAVING and LIMIT keep, matching the real counts", async () => {
+    const kept = async (sql: string, label: string) => {
+      const s = (await read(sql)).steps.find((x) => x.label === label)!;
+      const res = await runner.run(s.view!);
+      expect(res.columns[0]).toBe("__keep");
+      return [res.rows.filter((r) => r[0] === true).length, s.rows];
+    };
+    expect(await kept("SELECT * FROM orders WHERE amount > 50", "WHERE")).toEqual([17, 17]);
+    expect(await kept("SELECT customer_id, COUNT(*) FROM orders GROUP BY customer_id HAVING COUNT(*) >= 4", "HAVING")).toEqual([4, 4]);
+    expect(await kept("SELECT * FROM orders ORDER BY amount DESC LIMIT 3", "LIMIT")).toEqual([3, 3]);
+  });
+
+  it("shows a group's totals, and the columns a step reads", async () => {
+    const e = await read(
+      "SELECT c.name, SUM(o.amount) AS total FROM orders o JOIN customers c ON o.customer_id = c.id GROUP BY c.name HAVING SUM(o.amount) > 200",
+    );
+    const having = e.steps.find((s) => s.label === "HAVING")!;
+    expect((await runner.run(having.view!)).columns).toEqual(["__keep", "name", "SUM(o.amount)", "rows in the group"]);
+    expect(having.reads).toEqual(["SUM(o.amount)"]);
+    expect(e.steps.find((s) => s.label === "JOIN")!.reads).toEqual(["o.customer_id", "c.id"]);
   });
 });

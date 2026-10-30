@@ -52,7 +52,6 @@ export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps)
   const focus = scene.focusColumn
     ? table.columns.indexOf(scene.focusColumn)
     : table.columns.findIndex((_, i) => i !== idColumn);
-  const focusName = table.columns[focus] ?? "";
   const list = useRef<HTMLDivElement>(null);
 
   // Keep the rows being checked in view as the trace advances, scrolling only
@@ -72,8 +71,31 @@ export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps)
     }
   }, [trace, stepIndex]);
 
+  // Column names sit once in a header; each row holds only its values.
+  const shown = showDetails ? [focus, ...table.columns.map((_, i) => i).filter((i) => i !== focus && i !== idColumn)] : [focus];
+  const columns = { gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))` };
+
   return (
     <div ref={list} role="list" aria-label={`${table.name} rows`}>
+      {/* Screen readers hear each value with its column name instead (sr-only below). */}
+      <div
+        aria-hidden
+        className="sticky top-0 z-[2] grid min-h-11 grid-cols-[72px_minmax(0,1fr)_auto] items-center border-b-2 border-ink bg-sheet font-mono text-sm text-muted"
+      >
+        <span className="pl-[18px]">
+          {idColumn >= 0 ? "id" : "#"}
+        </span>
+        <span className="grid gap-x-3 pl-4 sm:pl-6" style={columns}>
+          {shown.map((ci) => (
+            <span key={ci} className={`truncate ${ci === focus ? "font-medium text-ink" : ""}`}>
+              {table.columns[ci]}
+            </span>
+          ))}
+        </span>
+        <span className="min-w-[5.75rem] pr-3 text-right font-sans sm:min-w-[6.5rem] sm:pr-[18px]">
+          Verdict
+        </span>
+      </div>
       {table.rows.map((row, i) => {
         const verdict = VERDICT[states.get(row.rid)?.status ?? "idle"];
         const value = row.cells[focus];
@@ -87,23 +109,24 @@ export function FilterStage({ scene, stepIndex, showDetails }: FilterStageProps)
             marker={idColumn >= 0 ? formatCell(row.cells[idColumn]) : i + 1}
             verdict={verdict}
           >
-            <p className="flex flex-wrap items-baseline gap-x-3 font-mono">
-              <span className="ledger-struck whitespace-nowrap text-[15px] sm:text-lg">
-                {focusName} {formatCell(value)}
-              </span>
-              {atBoundary && <MarginNote className="hidden text-[22px] sm:inline">exactly {formatNumber(value)}</MarginNote>}
-            </p>
-            {showDetails && (
-              <p className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[13px] text-muted">
-                {table.columns.map((c, ci) =>
-                  ci === focus || ci === idColumn ? null : (
-                    <span key={c}>
-                      {c} {formatCell(row.cells[ci])}
+            <span className="grid items-baseline gap-x-3 font-mono" style={columns}>
+              {shown.map((ci, k) =>
+                k === 0 ? (
+                  <span key={ci} className="flex flex-wrap items-baseline gap-x-3">
+                    <span className="ledger-struck whitespace-nowrap text-[15px] sm:text-lg">
+                      <span className="sr-only">{table.columns[ci]} </span>
+                      {formatCell(row.cells[ci])}
                     </span>
-                  ),
-                )}
-              </p>
-            )}
+                    {atBoundary && <MarginNote className="hidden text-[22px] sm:inline">exactly {formatNumber(value)}</MarginNote>}
+                  </span>
+                ) : (
+                  <span key={ci} className="truncate text-[13px] text-muted">
+                    <span className="sr-only">{table.columns[ci]} </span>
+                    {formatCell(row.cells[ci])}
+                  </span>
+                ),
+              )}
+            </span>
           </LedgerRow>
         );
       })}

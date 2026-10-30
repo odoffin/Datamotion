@@ -14,6 +14,7 @@ export const foundations = [
         "Read the query left to right. SELECT says you want data back. The star means every column. FROM names the table to read.",
         "The database answers with a result: a new grid built from the table. Asking never changes the table itself.",
         "Table names must match the database exactly. The shop has five tables: customers, products, orders, reviews and employees. The Columns tab shows what the lesson's table holds.",
+        "Notice the layout: SELECT on one line, FROM on the next, keywords in capitals. That is how professionals write SQL, so every query here is laid out that way, and Tidy up does it for you. The database does not mind either way, but people reading your query will.",
       ],
     },
     table: "products",

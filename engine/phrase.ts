@@ -89,6 +89,8 @@ function operand(ctx: PhraseContext, ts: Token[]): string {
     const agg = aggregatePhrase(ctx, c.name, c.args);
     if (agg) return ctx.grouped ? `its ${agg}` : `the ${agg}`;
   }
+  // Quotes mark a piece of text, so say so: "the text 'Lagos'".
+  if (ts.length === 1 && ts[0]!.kind === "string") return `the text ${ts[0]!.text}`;
   return textOf(ctx.sql, ts);
 }
 
@@ -187,6 +189,11 @@ function splitAnd(ts: Token[]): Token[][] {
     }
     return true;
   });
+}
+
+/** The single tests a condition is made of: split at the top-level AND and OR, brackets around each removed. */
+export function splitTests(ts: Token[]): Token[][] {
+  return splitTop(unwrap(ts), (t) => isWord(t, "or")).flatMap((part) => splitAnd(unwrap(part)).map(unwrap));
 }
 
 /** A WHERE, HAVING or ON condition in words: "amount is more than 50, and city is 'Lagos'". */
@@ -318,7 +325,7 @@ export function selectItemPhrase(ctx: PhraseContext, ts: Token[]): string {
   const alias = aliased ? ts[n - 1]!.text.replace(/^"|"$/g, "") : null;
   const phrase = expressionPhrase(ctx, expr);
   if (!alias) return phrase;
-  return isColumnRef(expr) ? `${phrase} (renamed ${alias})` : `${phrase} (as ${alias})`;
+  return isColumnRef(expr) ? `${phrase} (renamed ${alias})` : `${phrase} (called ${alias})`;
 }
 
 /** The column references a condition reads ("amount", "o.amount"), outside subqueries, at most three. */

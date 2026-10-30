@@ -66,6 +66,12 @@ export function HeroDemo() {
         </div>
         <div className="relative border-t border-rule">
           <span aria-hidden className="absolute inset-y-0 left-11 w-px bg-margin" />
+          {/* Column names once, in a header; the rows hold only values. */}
+          <div aria-hidden className="grid min-h-9 grid-cols-[44px_minmax(0,1fr)_auto] items-center border-b-2 border-ink font-mono text-[13px] text-muted">
+            <span className="pl-3">#</span>
+            <span className="pl-3.5 text-ink">{demo.ruleColumn}</span>
+            <span className="pr-2 font-sans">Verdict</span>
+          </div>
           {demo.rows.map((row, i) => (
             <div
               key={row.position}
@@ -74,7 +80,8 @@ export function HeroDemo() {
             >
               <span className="pl-3 text-muted">{row.position}</span>
               <span className="pl-3.5">
-                {demo.ruleColumn} <span className={row.kept ? undefined : "demo-struck"}>{String(row.amount)}</span>
+                <span className="sr-only">{demo.ruleColumn} </span>
+                <span className={row.kept ? undefined : "demo-struck"}>{String(row.amount)}</span>
               </span>
               {row.kept ? (
                 <span className="demo-verdict inline-flex items-center gap-1.5 pr-2 font-sans text-[13px] font-semibold text-good">

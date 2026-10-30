@@ -1,6 +1,6 @@
 import { closingBracket, depths, isPunct, isWord, parseWith, splitClauses, splitTop, textOf, unwrap, type Clause } from "./clauses";
 import { lex, type Token } from "./lex";
-import { andList, article, columnRefs, conditionPhrase, hasAggregate, selectItemPhrase, sortItems, type PhraseContext, type ValueKind } from "./phrase";
+import { andList, article, columnRefs, conditionPhrase, hasAggregate, selectItemPhrase, sortItems, splitTests, type PhraseContext, type ValueKind } from "./phrase";
 import type { QueryResult, QueryRunner } from "./query-runner";
 import { splitStatements } from "./sandbox";
 import { quoteIdent } from "./sql";
@@ -32,6 +32,19 @@ export interface MatchFigure {
 
 export type Figure = VerdictFigure | MatchFigure;
 
+/**
+ * Numbers in a step the learner can drag, to see what the test would keep
+ * instead. Text is split around the numbers: parts[0], number 0, parts[1], …
+ */
+export interface Tweak {
+  /** The step's SQL, split around its numbers. */
+  parts: string[];
+  /** A query split the same way, giving one true or false per row (or group). */
+  query: string[];
+  numbers: { value: number; min: number; max: number; step: number; about: string }[];
+  noun: "row" | "group";
+}
+
 export interface ExplainStep {
   /** The clause this step is about, as the learner wrote it. */
   sql: string;
@@ -40,6 +53,25 @@ export interface ExplainStep {
   /** Rows in and out, when the database could count them. */
   count?: string;
   figure?: Figure;
+  /** A query for the first rows of the table after this step, for stepping through the data. */
+  table?: string;
+  /**
+   * A query for the whole table this step shows (up to VIEW_ROWS rows). When
+   * its first column is __keep, each row is marked kept (true) or dropped.
+   */
+  view?: string;
+  /** Columns this step reads, as the view names them, to mark in its table. */
+  reads?: string[];
+  /** Rows (or groups) after this step. */
+  rows?: number;
+  /** A short name for the step: FROM, LEFT JOIN, WITH big, Inner query. */
+  label?: string;
+  /**
+   * SELECT only, when it just picks columns: the columns it keeps, as written
+   * (o.id, name, * or c.*), so the table before it can show them spotlighted.
+   */
+  keeps?: string[];
+  tweak?: Tweak;
 }
 
 export interface Explanation {
@@ -57,6 +89,17 @@ export interface ExplainOptions {
   result?: QueryResult | null;
 }
 
+/** Rows shown of each step's table. */
+export const SAMPLE_ROWS = 10;
+/** Rows a dragged number is tried against. */
+const TWEAK_ROWS = 2000;
+const sample = (q: string) => `${q} LIMIT ${SAMPLE_ROWS}`;
+/** Rows a step's whole table shows, enough for every lesson table. */
+export const VIEW_ROWS = 60;
+const full = (q: string) => `${q} LIMIT ${VIEW_ROWS}`;
+/** The marker column a view puts first to say which rows a step keeps. */
+export const KEEP = "__keep";
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const rows = (n: number) => plural(n, "row");
 const unquote = (s: string) => s.replace(/^"(.*)"$/, "$1");
@@ -67,7 +110,7 @@ export function cellText(v: unknown): string {
   return String(v);
 }
 
-function kinds(result: QueryResult | null | undefined) {
+export function kinds(result: QueryResult | null | undefined) {
   return (expr: string): ValueKind | null => {
     if (!result) return null;
     const want = unquote(expr.trim().replace(/^.*\./, "")).toLowerCase();
@@ -96,7 +139,7 @@ interface TableRef {
   alias: string | null;
 }
 
-function tableRef(sql: string, ts: readonly Token[]): TableRef {
+export function tableRef(sql: string, ts: readonly Token[]): TableRef {
   let i = 0;
   while (isPunct(ts[i + 1], ".")) i += 2;
   const name = unquote(textOf(sql, ts.slice(0, i + 1)));
@@ -112,7 +155,7 @@ interface ParsedJoin extends TableRef {
   using: string[] | null;
 }
 
-function parseJoin(sql: string, clause: Clause): ParsedJoin {
+export function parseJoin(sql: string, clause: Clause): ParsedJoin {
   const ts = clause.tokens;
   const at = ts.findIndex((t) => isWord(t, "join"));
   const mods = ts.slice(0, at).map((t) => t.text.toLowerCase());
@@ -255,9 +298,18 @@ function subqueries(sql: string, ts: readonly Token[]): string[] {
 async function subquerySteps(sql: string, clause: Clause, runner: QueryRunner | null, prefix: string, tester: string): Promise<ExplainStep[]> {
   const steps: ExplainStep[] = [];
   for (const inner of subqueries(sql, clause.tokens)) {
-    const res = runner ? await runner.run(`${/^\s*with\b/i.test(inner) ? "" : prefix}${inner}`) : null;
+    const own = `${/^\s*with\b/i.test(inner) ? "" : prefix}${inner}`;
+    const res = runner ? await runner.run(own) : null;
     const ok = res && !res.error && res.columns.length === 1;
     steps.push({
+      ...(ok
+        ? {
+            table: sample(`${/^\s*with\b/i.test(inner) ? "" : prefix}SELECT * FROM (${inner})`),
+            view: full(`${/^\s*with\b/i.test(inner) ? "" : prefix}SELECT * FROM (${inner})`),
+            rows: res.rows.length,
+            label: "Inner query",
+          }
+        : {}),
       sql: inner,
       sentence: ok
         ? `Before ${tester} tests anything, the inner query in brackets runs on its own.`
@@ -266,6 +318,135 @@ async function subquerySteps(sql: string, clause: Clause, runner: QueryRunner | 
     });
   }
   return steps;
+}
+
+interface Source {
+  /** How the query names it: the alias, or the table. */
+  q: string;
+  table: string;
+}
+
+/** The select list for a step's table: plain * for one table, every column named by its table when joined. */
+function columnsOf(sources: readonly Source[], opts: ExplainOptions): string {
+  if (sources.length < 2 || !opts.tables) return "*";
+  const parts: string[] = [];
+  for (const s of sources) {
+    const def = opts.tables.find((t) => t.name.toLowerCase() === s.table.toLowerCase());
+    if (!def) return "*";
+    for (const c of def.columns) parts.push(`${quoteIdent(s.q)}.${quoteIdent(c.name)} AS ${quoteIdent(`${s.q}.${c.name}`)}`);
+  }
+  return parts.join(", ");
+}
+
+/** Text of a run of tokens, split around some of them: ["amount > ", ""] around 50. */
+function cut(sql: string, span: readonly Token[], numbers: readonly Token[]): string[] {
+  const base = span[0]!.start;
+  const text = textOf(sql, span);
+  const parts: string[] = [];
+  let at = 0;
+  for (const n of numbers) {
+    parts.push(text.slice(at, n.start - base));
+    at = n.end - base;
+  }
+  parts.push(text.slice(at));
+  return parts;
+}
+
+const COMPARE_OPS = new Set(["=", "==", "!=", "<>", "<", "<=", ">", ">="]);
+
+/** Plain numbers a condition compares with (at most two), each with what it is compared to. */
+function comparedNumbers(sql: string, cond: Token[]): { token: Token; expr: string }[] {
+  const out: { token: Token; expr: string }[] = [];
+  for (const test of splitTests(cond)) {
+    const d = depths(test);
+    const at = test.findIndex((t, i) => d[i] === 0 && ((t.kind === "op" && COMPARE_OPS.has(t.text)) || isWord(t, "between")));
+    if (at <= 0) continue;
+    const left = test.slice(0, isWord(test[at - 1], "not") ? at - 1 : at);
+    const right = test.slice(at + 1);
+    if (isWord(test[at], "between")) {
+      if (right.length === 3 && right[0]!.kind === "number" && isWord(right[1], "and") && right[2]!.kind === "number") {
+        out.push({ token: right[0]!, expr: textOf(sql, left) }, { token: right[2]!, expr: textOf(sql, left) });
+      }
+    } else if (right.length === 1 && right[0]!.kind === "number") out.push({ token: right[0]!, expr: textOf(sql, left) });
+    else if (left.length === 1 && left[0]!.kind === "number") out.push({ token: left[0]!, expr: textOf(sql, right) });
+  }
+  return out.slice(0, 2);
+}
+
+/**
+ * Slider bounds that cover the data and the learner's own number: from 0 for
+ * data that is never negative, with room past the largest value on a short
+ * range, and the twelve months for month().
+ */
+function sliderRange(expr: string, value: number, lo: number, hi: number) {
+  const step = Number.isInteger(value) ? 1 : Number.isInteger(value * 2) ? 0.5 : 0.01;
+  const month = /^month\s*\(/i.test(expr);
+  const min = Math.min(value, month ? 1 : lo >= 0 ? 0 : Math.floor(lo));
+  const top = Math.ceil(hi);
+  const max = Math.max(value, month ? 12 : top - min < 20 ? top + 1 : top);
+  return max > min ? { min, max, step } : null;
+}
+
+const asNumber = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/**
+ * WHERE and HAVING tests against plain numbers become draggable: the data's
+ * own range for each number, and a query that tries the test on every row
+ * (or group) with the numbers filled in.
+ */
+async function conditionTweak(
+  runner: QueryRunner,
+  sql: string,
+  clause: Clause,
+  noun: "row" | "group",
+  around: { before: string; after: string },
+  rangeOf: (expr: string) => string,
+): Promise<Tweak | undefined> {
+  const cond = clause.tokens.slice(1);
+  const found = comparedNumbers(sql, cond);
+  const numbers: Tweak["numbers"] = [];
+  for (const { token, expr } of found) {
+    const res = await runner.run(rangeOf(expr));
+    const lo = asNumber(res.rows[0]?.[0]);
+    const hi = asNumber(res.rows[0]?.[1]);
+    const value = Number(token.text);
+    const range = res.error || lo === null || hi === null ? null : sliderRange(expr, value, lo, hi);
+    if (!range) return;
+    numbers.push({ value, ...range, about: `the number ${expr} is compared with` });
+  }
+  if (!numbers.length) return;
+  const tokens = found.map((f) => f.token);
+  const query = cut(sql, cond, tokens);
+  query[0] = `${around.before}(${query[0]}`;
+  query[query.length - 1] = `${query[query.length - 1]}) ${around.after} LIMIT ${TWEAK_ROWS}`;
+  return { parts: cut(sql, clause.tokens, tokens), query, numbers, noun };
+}
+
+/** The columns a SELECT list names, when every item is a plain column (or *), with any AS dropped. */
+function plainColumns(sql: string, items: Token[] | null): string[] | null {
+  if (!items) return null;
+  const out: string[] = [];
+  for (const item of splitTop(items, (t) => isPunct(t, ","))) {
+    const ts = item.length >= 3 && isWord(item[item.length - 2], "as") ? item.slice(0, -2) : item;
+    const text = textOf(sql, ts);
+    const plain = ts.every((t, i) =>
+      i % 2 === 1 ? isPunct(t, ".") : t.kind === "word" || t.kind === "ident" || (t.kind === "op" && t.text === "*" && i === ts.length - 1),
+    );
+    if (!plain || ts.length % 2 === 0) return null;
+    out.push(text);
+  }
+  return out.length ? out : null;
+}
+
+/** Totals written in a clause, as written: COUNT(*), SUM(o.amount). Window functions are not totals. */
+function aggregateCalls(sql: string, ts: readonly Token[]): string[] {
+  const out: string[] = [];
+  ts.forEach((t, i) => {
+    if (!["count", "sum", "avg", "min", "max"].includes(t.text.toLowerCase()) || !isPunct(ts[i + 1], "(")) return;
+    const close = closingBracket(ts, i + 1);
+    if (close > i && !isWord(ts[close + 1], "over")) out.push(textOf(sql, ts.slice(i, close + 1)));
+  });
+  return out;
 }
 
 const RUNS_BEFORE_SELECT: Partial<Record<Clause["kind"], string>> = {
@@ -289,6 +470,10 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
       sql: cte.text,
       sentence: `Work out ${cte.name} first. Its own query runs, and the steps below can read ${cte.name} like a table.`,
       count: n === null ? undefined : `${rows(n)} in ${cte.name}`,
+      table: sample(`${prefix}SELECT * FROM ${quoteIdent(cte.name)}`),
+      view: full(`${prefix}SELECT * FROM ${quoteIdent(cte.name)}`),
+      label: `WITH ${cte.name}`,
+      rows: n ?? undefined,
     });
   }
 
@@ -310,6 +495,10 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
         sql: span(sql, side),
         sentence: `Run the ${ordinal[k] ?? `next`} query on its own.`,
         count: n === null ? undefined : rows(n),
+        table: sample(`${prefix}SELECT * FROM (${span(sql, side)})`),
+        view: full(`${prefix}SELECT * FROM (${span(sql, side)})`),
+        label: `Query ${k + 1}`,
+        rows: n ?? undefined,
       });
       if (k === 0) continue;
       const op = body[bounds[k]!]!;
@@ -319,10 +508,20 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
         ? all ? "Put the two lists one under the other, keeping repeated rows." : "Put the two lists one under the other, then remove repeated rows, so each row appears once."
         : words[0] === "except" ? "Keep the rows of the first list that are not in the second."
         : "Keep only the rows that are in both lists.";
-      const together = await count(`${prefix}SELECT count(*) FROM (${span(sql, body.slice(0, bounds[k + 1]))})`);
-      steps.push({ sql: op.text, sentence, count: together === null ? undefined : `${rows(together)} out` });
+      const soFar = span(sql, body.slice(0, bounds[k + 1]));
+      const together = await count(`${prefix}SELECT count(*) FROM (${soFar})`);
+      steps.push({
+        sql: op.text,
+        sentence,
+        count: together === null ? undefined : `${rows(together)} out`,
+        table: sample(`${prefix}SELECT * FROM (${soFar})`),
+        view: full(`${prefix}SELECT * FROM (${soFar})`),
+        label: op.text.toUpperCase(),
+        rows: together ?? undefined,
+      });
     }
-    steps.push(...(await orderAndLimit(sql, body.slice(end), ctx, prefix, span(sql, body), runner, await count(`${prefix}SELECT count(*) FROM (${span(sql, body.slice(0, end))})`))));
+    const before = await count(`${prefix}SELECT count(*) FROM (${span(sql, body.slice(0, end))})`);
+    steps.push(...(await orderAndLimit({ sql, clauses: body.slice(end), ctx, prefix, body, runner, before })));
     return { steps, note: null };
   }
 
@@ -338,6 +537,7 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
 
   const aliases = new Map<string, string>();
   const seen = new Set<string>();
+  const sources: Source[] = [];
   if (from) {
     const items = splitTop(from.tokens.slice(1), (t) => isPunct(t, ","));
     let sentence: string;
@@ -353,21 +553,37 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
       aliases.set(t.name.toLowerCase(), t.name);
       if (t.alias) aliases.set(t.alias.toLowerCase(), t.name);
       seen.add(t.name.toLowerCase());
+      sources.push({ q: t.alias ?? t.name, table: t.name });
     }
     before = await count(`${prefix}SELECT count(*) ${from.text}`);
-    steps.push({ sql: from.text, sentence, count: before === null ? undefined : rows(before) });
+    steps.push({
+      sql: from.text,
+      sentence,
+      count: before === null ? undefined : rows(before),
+      table: sample(`${prefix}SELECT * ${from.text}`),
+      view: full(`${prefix}SELECT * ${from.text}`),
+      label: "FROM",
+      rows: before ?? undefined,
+    });
   }
 
   const selectRefs = select ? qualifiedRefs(select.tokens) : [];
   for (const [k, clause] of joins.entries()) {
     const j = parseJoin(sql, clause);
-    const n = await count(`${prefix}SELECT count(*) ${span(sql, [from!, ...joins.slice(0, k + 1)])}`);
+    const joined = span(sql, [from!, ...joins.slice(0, k + 1)]);
+    sources.push({ q: j.alias ?? j.name, table: j.name });
+    const n = await count(`${prefix}SELECT count(*) ${joined}`);
     const figure = runner ? await matchFigure(runner, opts, { join: j, aliases, selectRefs }) : undefined;
     steps.push({
       sql: clause.text,
       sentence: joinSentence(ctx, j, seen),
       count: n === null ? undefined : before === null ? rows(n) : `${rows(before)} in, ${n} out`,
       ...(figure ? { figure } : {}),
+      table: sample(`${prefix}SELECT ${columnsOf(sources, opts)} ${joined}`),
+      view: full(`${prefix}SELECT ${columnsOf(sources, opts)} ${joined}`),
+      label: clause.tokens.slice(0, clause.tokens.findIndex((t) => isWord(t, "join")) + 1).map((t) => t.text.toUpperCase()).join(" "),
+      reads: j.on ? columnRefs(j.on, sql) : [],
+      rows: n ?? undefined,
     });
     aliases.set(j.name.toLowerCase(), j.name);
     if (j.alias) aliases.set(j.alias.toLowerCase(), j.name);
@@ -379,18 +595,39 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
     steps.push(...(await subquerySteps(sql, where, runner, prefix, "WHERE")));
     const n = await count(`${prefix}SELECT count(*) ${fromText} ${where.text}`);
     const figure = runner ? await verdictFigure(runner, prefix, fromText, where, sql) : undefined;
+    const tweak = runner
+      ? await conditionTweak(runner, sql, where, "row", { before: `${prefix}SELECT `, after: fromText }, (expr) =>
+          `${prefix}SELECT min(${expr}), max(${expr}) ${fromText}`,
+        )
+      : undefined;
     steps.push({
       sql: where.text,
       sentence: `Keep a row only if ${conditionPhrase(ctx, where.tokens.slice(1))}.`,
       count: n === null ? undefined : before === null ? `${rows(n)} kept` : `${rows(before)} in, ${n} kept, ${before - n} dropped`,
       ...(figure ? { figure } : {}),
+      table: sample(`${prefix}SELECT ${columnsOf(sources, opts)} ${fromText} ${where.text}`),
+      view: full(`${prefix}SELECT (${textOf(sql, where.tokens.slice(1))}) AS ${KEEP}, ${columnsOf(sources, opts)} ${fromText}`),
+      reads: columnRefs(where.tokens.slice(1), sql),
+      label: "WHERE",
+      rows: n ?? undefined,
+      ...(tweak ? { tweak } : {}),
     });
     before = n;
   }
 
   let groups: number | null = null;
+  const keys = group ? splitTop(group.tokens.slice(2), (t) => isPunct(t, ",")).map((p) => textOf(sql, p)) : [];
+  // Groups show their keys, the totals the query uses (SUM(o.amount)…) and how many rows each holds.
+  const totals = [...new Set([select, having].flatMap((c) => (c ? aggregateCalls(sql, c.tokens) : [])))];
+  const groupColumns = [
+    ...keys,
+    ...totals.map((t) => `${t} AS ${quoteIdent(t)}`),
+    ...(totals.some((t) => /^count\s*\(\s*\*\s*\)$/i.test(t)) ? [] : ['count(*) AS "rows in the group"']),
+  ].join(", ");
+  const groupsQuery = (keep: string, extra: string) =>
+    `${prefix}SELECT ${keep}${groupColumns} ${fromText} ${where?.text ?? ""} ${group?.text ?? ""} ${extra}`;
+  const grouped = (extra: string) => sample(groupsQuery("", extra));
   if (group) {
-    const keys = splitTop(group.tokens.slice(2), (t) => isPunct(t, ",")).map((p) => textOf(sql, p));
     groups = await count(`${prefix}SELECT count(*) FROM (SELECT 1 ${fromText} ${where?.text ?? ""} ${group.text})`);
     steps.push({
       sql: group.text,
@@ -399,16 +636,37 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
           ? `Gather the rows into groups, one for each different ${keys[0]}.`
           : `Gather the rows into groups, one for each different combination of ${andList(keys)}.`,
       count: groups === null ? undefined : `${before === null ? "" : `${rows(before)} in, `}${plural(groups, "group")}`,
+      table: grouped(""),
+      view: full(groupsQuery("", "")),
+      label: "GROUP BY",
+      reads: keys,
+      rows: groups ?? undefined,
     });
   }
 
   if (having) {
     steps.push(...(await subquerySteps(sql, having, runner, prefix, "HAVING")));
     const n = await count(`${prefix}SELECT count(*) FROM (SELECT 1 ${fromText} ${where?.text ?? ""} ${group?.text ?? ""} ${having.text})`);
+    const groupsOf = `${fromText} ${where?.text ?? ""} ${group?.text ?? ""}`;
+    const tweak = runner
+      ? await conditionTweak(runner, sql, having, "group", { before: `${prefix}SELECT `, after: groupsOf }, (expr) =>
+          `${prefix}SELECT min(v), max(v) FROM (SELECT ${expr} AS v ${groupsOf})`,
+        )
+      : undefined;
     steps.push({
       sql: having.text,
       sentence: `Keep a group only if ${conditionPhrase({ ...ctx, grouped: true }, having.tokens.slice(1))}.`,
       count: n === null || groups === null ? undefined : `${plural(groups, "group")} in, ${n} kept`,
+      ...(group
+        ? {
+            table: grouped(having.text),
+            view: full(groupsQuery(`(${textOf(sql, having.tokens.slice(1))}) AS ${KEEP}, `, "")),
+            reads: aggregateCalls(sql, having.tokens),
+          }
+        : {}),
+      rows: n ?? undefined,
+      label: "HAVING",
+      ...(tweak ? { tweak } : {}),
     });
     groups = n;
   }
@@ -432,14 +690,23 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
       : group ? `${rows(out)} out, one for each group${cols}`
       : before !== null && before !== out ? `${rows(before)} in, ${out} out${cols}`
       : `${rows(out)} out${cols}`;
-    steps.push({ sql: select.text, sentence, count: counted });
+    steps.push({
+      sql: select.text,
+      sentence,
+      count: counted,
+      table: sample(`${prefix}SELECT * FROM (${core})`),
+      view: full(`${prefix}SELECT * FROM (${core})`),
+      label: distinct ? "SELECT DISTINCT" : "SELECT",
+      ...(plainColumns(sql, distinct ? null : items) ? { keeps: plainColumns(sql, items)! } : {}),
+      rows: out ?? undefined,
+    });
   }
 
   for (const q of of("qualify")) {
     steps.push({ sql: q.text, sentence: `Keep a row only if ${conditionPhrase(ctx, q.tokens.slice(1))}, now that the window columns are worked out.` });
   }
 
-  steps.push(...(await orderAndLimit(sql, body.slice(coreEnd), ctx, prefix, span(sql, body), runner, out)));
+  steps.push(...(await orderAndLimit({ sql, clauses: body.slice(coreEnd), ctx, prefix, body, runner, before: out })));
 
   const earlier = body.flatMap((c) => (RUNS_BEFORE_SELECT[c.kind] ? [RUNS_BEFORE_SELECT[c.kind]!] : []));
   const ranFirst = [...new Set(earlier)];
@@ -449,17 +716,24 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
   };
 }
 
-async function orderAndLimit(
-  sql: string,
-  clauses: readonly Clause[],
-  ctx: PhraseContext,
-  prefix: string,
-  whole: string,
-  runner: QueryRunner | null,
-  before: number | null,
-): Promise<ExplainStep[]> {
+interface Tail {
+  sql: string;
+  /** ORDER BY, LIMIT and OFFSET at the end of the query. */
+  clauses: readonly Clause[];
+  ctx: PhraseContext;
+  prefix: string;
+  /** Every clause after WITH. */
+  body: readonly Clause[];
+  runner: QueryRunner | null;
+  /** Rows reaching ORDER BY. */
+  before: number | null;
+}
+
+async function orderAndLimit({ sql, clauses, ctx, prefix, body, runner, before }: Tail): Promise<ExplainStep[]> {
   const steps: ExplainStep[] = [];
+  const whole = span(sql, body);
   const order = clauses.find((c) => c.kind === "order");
+  const untilOrder = order ? span(sql, body.slice(0, body.indexOf(order) + 1)) : null;
   if (order) {
     const items = sortItems(ctx, order.tokens.slice(2));
     const first = items[0]!;
@@ -470,24 +744,51 @@ async function orderAndLimit(
           ? `Sort the rows by ${first.phrase}.`
           : `Sort the rows by ${first.phrase}. Rows with the same ${first.expr} are then sorted by ${andList(items.slice(1).map((i) => i.phrase), "then")}.`,
       count: before === null ? undefined : `The same ${rows(before)}, now in order`,
+      table: sample(`${prefix}${untilOrder}`),
+      view: full(`${prefix}${untilOrder}`),
+      reads: items.map((i) => i.expr),
+      label: "ORDER BY",
+      rows: before ?? undefined,
     });
   }
-  const cut = clauses.filter((c) => c.kind === "limit" || c.kind === "offset");
-  if (cut.length) {
+  const cuts = clauses.filter((c) => c.kind === "limit" || c.kind === "offset");
+  if (cuts.length) {
     const value = (kind: Clause["kind"]) => {
-      const c = cut.find((x) => x.kind === kind);
+      const c = cuts.find((x) => x.kind === kind);
       return c ? textOf(sql, c.tokens.slice(1)) : null;
     };
     const limit = value("limit");
     const offset = value("offset");
     const keep = limit === "1" ? "the next row" : `the next ${limit} rows`;
     const n = await countOf(runner, `${prefix}SELECT count(*) FROM (${whole})`);
+    // Dragging LIMIT: rows before it, numbered, and kept while the number is in reach.
+    const limitClause = cuts.find((c) => c.kind === "limit");
+    const number = limitClause?.tokens[1];
+    const kept = untilOrder ?? span(sql, body.slice(0, body.indexOf(cuts[0]!)));
+    const tweak: Tweak | undefined =
+      runner && limitClause && !offset && number?.kind === "number" && limitClause.tokens.length === 2 && before !== null
+        ? {
+            parts: cut(sql, limitClause.tokens, [number]),
+            query: [`${prefix}SELECT row_number() OVER () <= `, ` FROM (${kept}) LIMIT ${TWEAK_ROWS}`],
+            numbers: [{ value: Number(number.text), min: 0, max: Math.max(before, Number(number.text)), step: 1, about: "how many rows to keep" }],
+            noun: "row",
+          }
+        : undefined;
     steps.push({
-      sql: span(sql, cut),
+      sql: span(sql, cuts),
       sentence: offset
         ? `Skip the first ${offset} rows${limit ? `, then keep ${keep}` : ""}.`
         : limit === "1" ? "Keep only the first row." : `Keep only the first ${limit} rows.`,
       count: n === null ? undefined : before === null ? `${rows(n)} kept` : `${rows(before)} in, ${n} kept`,
+      table: sample(`${prefix}SELECT * FROM (${whole})`),
+      // Rows before the cut, numbered in order, kept while they fall inside it.
+      view: full(
+        `${prefix}SELECT (n_ > ${Number(offset ?? 0) || 0} AND n_ <= ${Number(offset ?? 0) || 0} + ${Number(limit) || 0}) AS ${KEEP}, * EXCLUDE (n_) ` +
+          `FROM (SELECT *, row_number() OVER () AS n_ FROM (${kept}))`,
+      ),
+      label: cuts.map((c) => c.tokens[0]!.text.toUpperCase()).join(" and "),
+      rows: n ?? undefined,
+      ...(tweak ? { tweak } : {}),
     });
   }
   return steps;
