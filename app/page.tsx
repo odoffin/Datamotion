@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ButtonLink } from "@/components/ledger";
 import { HeroDemo } from "@/components/landing/HeroDemo";
 import { HowALessonWorks } from "@/components/landing/HowALessonWorks";
+import { Intro } from "@/components/landing/Intro";
 import { LandingFooter, LandingHeader } from "@/components/landing/LandingChrome";
 import { CAPTION, WRAP } from "@/components/landing/layout";
 import { PenCircle, PenUnderline } from "@/components/landing/Pen";
@@ -19,6 +20,8 @@ const startLabel = `Start with ${demo.chapterName}`;
 export default function Home() {
   return (
     <>
+      {/* First in the HTML, so the intro covers the page from the first paint. */}
+      <Intro />
       <LandingHeader />
       <main className="flex-1">
         <section className={`${WRAP} grid items-center gap-16 pb-24 pt-12 min-[861px]:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] min-[861px]:pt-18`}>

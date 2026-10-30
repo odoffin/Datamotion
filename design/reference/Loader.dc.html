@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Datapen loading intro</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,700&family=Fraunces:opsz,wght@9..144,700&family=Caveat:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F3EDE0;--sheet:#FBF8F1;--ink:#1D1B16;--muted:#625D50;--rule:#D9D1BC;--margin:#D98B83;--serif:'Fraunces',Georgia,serif;--hand:'Caveat',cursive;--sans:'Inter',system-ui,sans-serif}
+body{margin:0;background:var(--paper)}
+*{box-sizing:border-box}
+h1,p{margin:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 22px;border-radius:2px;font-family:var(--sans);font-size:15px;font-weight:600;text-decoration:none}
+.btn-solid{background:var(--ink);color:var(--sheet);border:1px solid var(--ink)}
+.btn-line{background:transparent;color:var(--ink);border:1px solid var(--ink)}
+/* one 9s loop: ink fills the letters, the pen underlines, the sheet lifts off like a wave and the page is there */
+.veil{position:absolute;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;animation:lift 9s infinite}
+@keyframes lift{0%,74%{transform:translateY(0);animation-timing-function:cubic-bezier(.65,0,.35,1)}88%,99.5%{transform:translateY(-112%)}100%{transform:translateY(0)}}
+.edge{position:absolute;left:0;right:0;bottom:-69px;height:70px;overflow:hidden}
+.edge svg{display:block;width:1840px;height:70px;fill:var(--paper);animation:flow 5s linear infinite}
+.water{animation:rise 9s infinite}
+@keyframes rise{0%,6%{transform:translateY(250px);animation-timing-function:cubic-bezier(.45,0,.3,1)}52%,100%{transform:translateY(-30px)}}
+.w1{animation:flow 3.4s linear infinite}
+.w2{animation:flow 2.1s linear infinite}
+@keyframes flow{to{transform:translateX(-400px)}}
+.line{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 9s infinite}
+@keyframes draw{0%,52%{stroke-dashoffset:1}60%,100%{stroke-dashoffset:0}}
+.say{opacity:0;animation:say 9s infinite}
+@keyframes say{0%,56%{opacity:0;transform:translateY(6px)}64%,100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){
+.veil{display:none}
+.water,.w1,.w2,.line,.say,.edge svg{animation:none}
+}
+</style>
+</helmet>
+
+<div style="--pen: {{ accent }}; position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--paper); color: var(--ink); font-family: var(--sans)">
+
+<div style="position: absolute; inset: 0; padding: 28px 64px 0">
+<header style="display: flex; align-items: baseline; justify-content: space-between">
+<span style="font-family: var(--serif); font-style: italic; font-weight: 700; font-size: 28px">Datapen</span>
+<nav style="display: flex; gap: 28px; font-size: 15px; color: var(--muted)"><span>How it works</span><span>Chapters</span><span style="color: var(--ink); font-weight: 600">Start learning</span></nav>
+</header>
+<div style="display: flex; flex-direction: column; gap: 28px; padding-top: 120px; max-width: 700px">
+<h1 style="font-family: var(--serif); font-weight: 700; font-size: 72px; line-height: 1.04; letter-spacing: -0.02em">Type the query. Watch every row get its verdict.</h1>
+<p style="font-size: 19px; line-height: 1.6; color: var(--muted); max-width: 34em">Datapen teaches SQL by running your own code on real data, one row at a time. You type every line yourself, so it sticks.</p>
+<div style="display: flex; gap: 14px"><span class="btn btn-solid">Start with Filtering</span><span class="btn btn-line">Find my level</span></div>
+</div>
+</div>
+
+<div class="veil" aria-hidden="true">
+<svg viewBox="0 0 700 260" style="width: 760px; max-width: 90%; height: auto; display: block" role="img" aria-label="Datapen">
+<defs>
+<clipPath id="lettersClip"><text x="350" y="190" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-style="italic" font-weight="700" font-size="170">Datapen</text></clipPath>
+</defs>
+<g clip-path="url(#lettersClip)">
+<g class="water">
+<g class="w2" style="opacity: .45"><path fill="var(--margin)" d="M-200 14 q50 -22 100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 V400 H-200 Z"/></g>
+<g class="w1"><path fill="var(--pen)" d="M-200 24 q50 -26 100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 V400 H-200 Z"/></g>
+</g>
+</g>
+<text x="350" y="190" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-style="italic" font-weight="700" font-size="170" fill="none" stroke="var(--ink)" stroke-width="2">Datapen</text>
+<path class="line" pathLength="1" d="M70 222 C170 210 300 232 420 218 C520 207 600 224 640 214" fill="none" stroke="var(--pen)" stroke-width="5" stroke-linecap="round"/>
+</svg>
+<p class="say" style="font-family: var(--hand); font-size: 32px; line-height: 1; color: var(--pen)">type it yourself, watch it run</p>
+<div class="edge"><svg viewBox="0 0 1840 70" preserveAspectRatio="none"><path d="M1840 0 H0 V30 H40 q50 28 100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 V0 Z"/></svg></div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#C2362B"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return { accent: this.props.accent ?? '#C2362B' };
+}
+}
+</script>
+</body>
+</html>

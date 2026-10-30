@@ -178,8 +178,9 @@ body {
 .demo-shake { display: inline-block; animation: shake-a 0.45s ease-in-out 1.2s 1; }
 
 /* Red-pen strokes: SVG paths with pathLength="1", drawn by dashoffset. */
+/* Dash 1, gap 2: hidden at offset 1 with no zero-length dash left for a round cap to dot. */
 .pen-stroke path {
-  stroke-dasharray: 1;
+  stroke-dasharray: 1 2;
   stroke-dashoffset: 1;
   animation: pen-draw 1s ease-out 0.6s forwards;
 }
@@ -226,6 +227,60 @@ body {
 /* If the script never arrives, show the Start button anyway. */
 @keyframes pending-fallback { to { visibility: visible; } }
 
+/* ------------------------------------------------------------------------
+ * Loading intro on "/" (design/reference/Loader.dc.html). Shown only while
+ * html[data-intro] is set by the inline script in components/landing/Intro.tsx:
+ *   on    ink rises to about 85% and waits for the page to load
+ *   lift  the fill completes, the pen underlines, the sheet lifts away
+ *   skip  a click or key: the sheet lifts at once
+ * Durations here match OUTRO_MS and SKIP_MS there.
+ * --------------------------------------------------------------------- */
+.intro { display: none; }
+/* Scrolling is locked only while it shows; the gutter keeps the page from shifting. */
+html[data-intro] { overflow: hidden; scrollbar-gutter: stable; }
+html[data-intro] .intro {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--paper);
+  touch-action: none;
+}
+.intro-word { font-size: 170px; font-style: italic; font-weight: 700; }
+.intro-rise { transform: translateY(250px); animation: intro-rise 0.9s cubic-bezier(0.25, 0.8, 0.3, 1) 0.05s forwards; }
+@keyframes intro-rise { to { transform: translateY(66px); } }
+.intro-top { transition: transform 0.3s ease-out; }
+.intro-flow-slow { animation: intro-flow 2.1s linear infinite; }
+.intro-flow-fast { animation: intro-flow 3.4s linear infinite; }
+@keyframes intro-flow { to { transform: translateX(-400px); } }
+.intro-line { stroke-dasharray: 1 2; stroke-dashoffset: 1; }
+.intro-say { opacity: 0; transform: translateY(6px); animation: intro-say 0.3s ease-out 0.5s forwards; }
+@keyframes intro-say { to { opacity: 1; transform: none; } }
+.intro-edge { position: absolute; left: 0; right: 0; bottom: -69px; height: 70px; overflow: hidden; }
+.intro-edge svg { display: block; width: calc(100% + 200px); animation: intro-edge 2.5s linear infinite; }
+@keyframes intro-edge { to { transform: translateX(-200px); } }
+
+html[data-intro="lift"] .intro-top, html[data-intro="skip"] .intro-top { transform: translateY(-96px); }
+html[data-intro="lift"] .intro-line { animation: pen-draw 0.35s ease-out 0.05s forwards; }
+html[data-intro="lift"] .intro { animation: intro-lift 0.8s cubic-bezier(0.65, 0, 0.35, 1) 0.35s forwards; }
+html[data-intro="skip"] .intro { animation: intro-lift 0.45s cubic-bezier(0.65, 0, 0.35, 1) forwards; }
+@keyframes intro-lift { to { transform: translateY(calc(-100% - 80px)); } }
+
+/* The hero demo waits under the sheet and starts as it lifts. */
+html[data-intro="on"] :is(.demo-text, .demo-caret, .demo-verdict, .demo-struck, .demo-shake, .pen-stroke path) {
+  animation-play-state: paused;
+}
+
+/* Safety net: if the script stopped half way, the sheet and the scroll lock still go. */
+html[data-intro] { animation: intro-unlock 0s 6s forwards; }
+html[data-intro="on"] .intro { animation: intro-failsafe 0s 6s forwards; }
+@keyframes intro-unlock { to { overflow: visible; } }
+@keyframes intro-failsafe { to { visibility: hidden; } }
+
 @media (prefers-reduced-motion: reduce) {
   .demo-text { animation: none; clip-path: none; }
   .demo-caret { display: none; }
@@ -233,4 +288,7 @@ body {
   .demo-shake { animation: none; }
   .pen-stroke path, .pen-on-view .pen-stroke path { animation: none; stroke-dashoffset: 0; }
   .how-ledger::before { animation: none; transform: none; }
+  /* No intro at all: the script never sets data-intro, and this covers a stale attribute. */
+  html[data-intro] .intro { display: none; }
+  html[data-intro] { overflow: visible; }
 }

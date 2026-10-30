@@ -10,7 +10,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${fontVariables} h-full antialiased`}>
+    // The landing page's intro script sets data-intro on <html> before React hydrates.
+    <html lang="en" className={`${fontVariables} h-full antialiased`} suppressHydrationWarning>
       <body className="flex min-h-full flex-col overflow-x-hidden bg-paper font-sans text-ink">
         {children}
       </body>
