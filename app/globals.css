@@ -4,6 +4,7 @@
 :root {
   --paper: #f3ede0;
   --sheet: #fbf8f1;
+  --sheet-strong: #ffffff;
   --ink: #1d1b16;
   --ink-strong: #000000;
   --muted: #625d50;
@@ -23,6 +24,7 @@
 @theme inline {
   --color-paper: var(--paper);
   --color-sheet: var(--sheet);
+  --color-sheet-strong: var(--sheet-strong);
   --color-ink: var(--ink);
   --color-ink-strong: var(--ink-strong);
   --color-muted: var(--muted);
@@ -119,4 +121,116 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .rise, .shake-a, .shake-b { animation: none; }
   .slip, .slip-gone, .ledger-line { transition: none; }
+}
+
+/* ------------------------------------------------------------------------
+ * Landing page (design/reference/Landing.dc.html). CSS only, so it plays
+ * with scripting off; every piece has a reduced-motion final state below.
+ * --------------------------------------------------------------------- */
+
+/* The hero slip types the lesson's goal, then every row gets its verdict.
+   It plays once, in under five seconds, and rests on the result. Timings
+   (--start, --dur, --verdicts-at) come from components/landing/HeroDemo.tsx. */
+.demo-code { container-type: inline-size; }
+.demo-line { position: relative; display: inline-block; vertical-align: bottom; white-space: pre; }
+.demo-text {
+  display: inline-block;
+  clip-path: inset(0 100% 0 0);
+  animation-name: demo-reveal;
+  animation-duration: var(--dur);
+  animation-timing-function: steps(var(--chars), end);
+  animation-delay: var(--start);
+  animation-fill-mode: both;
+}
+@keyframes demo-reveal { to { clip-path: inset(0 0 0 0); } }
+.demo-caret {
+  position: absolute;
+  top: 0.2em;
+  bottom: 0.2em;
+  left: 0;
+  width: 2px;
+  background: var(--ink);
+  opacity: 0;
+  animation-name: demo-caret-move, demo-caret-on;
+  animation-duration: var(--dur), var(--dur);
+  animation-timing-function: steps(var(--chars), end), linear;
+  animation-delay: var(--start), var(--start);
+  animation-fill-mode: both, none;
+}
+@keyframes demo-caret-move { to { transform: translateX(calc(var(--chars) * 1ch)); } }
+@keyframes demo-caret-on { from, to { opacity: 1; } }
+/* Too narrow for one line: the WHERE clause types on a second line. */
+@container (max-width: 25rem) {
+  .demo-line { display: block; }
+}
+.demo-verdict {
+  animation: demo-appear 0.3s ease-out both;
+  animation-delay: calc(var(--verdicts-at, 0s) + var(--i, 0) * 0.15s);
+}
+@keyframes demo-appear { from { opacity: 0; } }
+.demo-struck {
+  text-decoration: line-through 2px var(--pen);
+  opacity: 0.55;
+  animation: demo-strike 0.3s ease-out both;
+  animation-delay: calc(var(--verdicts-at, 0s) + var(--i, 0) * 0.15s);
+}
+@keyframes demo-strike { from { text-decoration-color: transparent; opacity: 1; } }
+.demo-shake { display: inline-block; animation: shake-a 0.45s ease-in-out 1.2s 1; }
+
+/* Red-pen strokes: SVG paths with pathLength="1", drawn by dashoffset. */
+.pen-stroke path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: pen-draw 1s ease-out 0.6s forwards;
+}
+@keyframes pen-draw { to { stroke-dashoffset: 0; } }
+
+/* "How a lesson works": one ledger sheet whose margin line draws as it scrolls in. */
+.how-ledger { position: relative; view-timeline-name: --how-ledger; }
+@media (min-width: 861px) {
+  .how-ledger::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 190px;
+    width: 1px;
+    background: var(--margin);
+    transform-origin: top;
+  }
+}
+@keyframes margin-draw { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+@supports (animation-timeline: view()) {
+  .how-ledger::before {
+    animation: margin-draw linear both;
+    animation-timeline: --how-ledger;
+    animation-range: entry 0% cover 55%;
+  }
+  /* Circles below the fold draw as they come into view, not unseen on load. */
+  .pen-on-view { view-timeline-name: --pen-on-view; }
+  .pen-on-view .pen-stroke path {
+    animation: pen-draw linear both;
+    animation-timeline: --pen-on-view;
+    animation-range: entry 100% cover 45%;
+  }
+}
+
+/* On the ink band the ink focus ring would vanish. */
+.ink-band :focus-visible { outline-color: var(--sheet); }
+
+/* The primary action waits for saved progress so it never flips from Start to
+   Continue. Without scripting it shows the Start button straight away. */
+@media (scripting: enabled) {
+  [data-pending] { visibility: hidden; animation: pending-fallback 0s 3s forwards; }
+}
+/* If the script never arrives, show the Start button anyway. */
+@keyframes pending-fallback { to { visibility: visible; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-text { animation: none; clip-path: none; }
+  .demo-caret { display: none; }
+  .demo-verdict, .demo-struck { animation: none; }
+  .demo-shake { animation: none; }
+  .pen-stroke path, .pen-on-view .pen-stroke path { animation: none; stroke-dashoffset: 0; }
+  .how-ledger::before { animation: none; transform: none; }
 }

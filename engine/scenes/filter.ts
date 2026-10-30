@@ -185,12 +185,13 @@ function listRows(positions: number[]): string {
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
-interface Check {
+export interface Check {
   rid: RowId;
   keep: boolean;
 }
 
-function scanSteps(
+/** The step-by-step scan of a WHERE, in batches. Pure; the landing page reuses it for its example. */
+export function scanSteps(
   table: string,
   checks: Check[],
   condition: string | null,

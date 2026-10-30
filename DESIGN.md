@@ -1,7 +1,7 @@
 # DESIGN.md: the Ledger (locked design system)
 
 This file is the source of truth for how the app looks. Do not invent a new look.
-The approved screens live in `design/reference/` (Lesson, Map, Placement as `.dc.html`).
+The approved screens live in `design/reference/` (Landing, Lesson, Map, Placement as `.dc.html`).
 Open them to see exact spacing, copy tone and behaviour. Port them to React/Tailwind;
 do not copy the Design Component markup literally.
 
