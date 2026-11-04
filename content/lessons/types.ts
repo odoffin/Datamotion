@@ -3,6 +3,28 @@ import type { LessonGoal } from "@/engine/check";
 import type { SandboxSpec } from "@/engine/sandbox";
 import type { SceneType } from "@/engine/trace";
 
+/**
+ * The lesson taught like a textbook page, in words a young child could follow:
+ * an everyday picture, how it works, a worked example, the usual mistake and
+ * one line to keep.
+ */
+export interface Teaching {
+  /** An everyday picture of the idea. */
+  picture: string;
+  /** How it works, one short step per line. */
+  steps: string[];
+  /**
+   * A worked example on other data than the exercise, so it never hands over
+   * the answer. It runs live; `check` is the query that shows a sandbox
+   * lesson's table afterwards.
+   */
+  example: { sql: string; says: string; check?: string };
+  /** The mistake most beginners make, and how to avoid it. */
+  watchOut: string;
+  /** One line to keep. */
+  remember: string;
+}
+
 export interface LessonDefinition {
   id: string;
   concept_id: string;
@@ -30,5 +52,7 @@ export interface LessonDefinition {
   sandbox?: SandboxSpec;
   /** Gentle nudges that never give the answer away, mildest first. */
   hints: string[];
+  /** Explained simply (content/lessons/teaching.ts). Every lesson has one. */
+  teach?: Teaching;
   nextLessonId?: string;
 }

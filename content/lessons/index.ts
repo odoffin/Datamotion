@@ -4,6 +4,7 @@ import { filtering, sorting } from "./ch03-04-filter-sort";
 import { aggregation, functions } from "./ch05-06-functions-aggregates";
 import { joins, subqueries, windows } from "./ch07-09-joins-windows";
 import { changingData, design, realWorld } from "./ch10-12-sandbox";
+import { teaching } from "./teaching";
 import type { LessonDefinition } from "./types";
 
 const all: readonly LessonDefinition[] = [
@@ -19,7 +20,8 @@ export const lessonOrder: readonly string[] = chapters.flatMap((c) => c.lessonId
 export const lessons: Readonly<Record<string, LessonDefinition>> = Object.fromEntries(
   lessonOrder.map((id, i) => {
     const next = lessonOrder[i + 1];
-    return [id, { ...byId.get(id)!, ...(next ? { nextLessonId: next } : {}) }];
+    const teach = teaching[id];
+    return [id, { ...byId.get(id)!, ...(next ? { nextLessonId: next } : {}), ...(teach ? { teach } : {}) }];
   }),
 );
 

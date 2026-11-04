@@ -147,6 +147,12 @@ function matchesColumn(column: string, names: readonly string[]): boolean {
   });
 }
 
+/** The new name AS gives a column, if the column is one SELECT renames. */
+function renamedTo(column: string, renames: Readonly<Record<string, string>>): string | undefined {
+  const hit = Object.keys(renames).find((k) => matchesColumn(column, [k]));
+  return hit ? renames[hit] : undefined;
+}
+
 /** What a step's table shows: its own view, or (for SELECT) the table before it with the kept columns spotlighted. */
 export interface Display {
   view: string | undefined;
@@ -154,6 +160,8 @@ export interface Display {
   onlyKept: boolean;
   /** Columns to spotlight with the highlighter. */
   spotlight: readonly string[];
+  /** New names AS gives the spotlighted columns: the header shows the new name, and what it was. */
+  renames: Readonly<Record<string, string>>;
 }
 
 /**
@@ -219,7 +227,14 @@ function StepTable({ step, display, reducedMotion }: { step: ExplainStep; displa
               scope="col"
               className={`border-b-2 border-ink px-3 py-2 text-left ${lit[i] ? "bg-marker font-semibold text-ink" : anyLit ? "font-normal text-muted/70" : "font-medium text-muted"}`}
             >
-              {c}
+              {lit[i] && renamedTo(c, display.renames) ? (
+                <>
+                  {renamedTo(c, display.renames)}
+                  <span className="block font-sans text-xs font-normal text-muted">was {c}</span>
+                </>
+              ) : (
+                c
+              )}
             </th>
           ))}
           {keyed && (
@@ -285,7 +300,9 @@ function StepTable({ step, display, reducedMotion }: { step: ExplainStep; displa
 
 /** What the highlighter means at this step, in one plain sentence. */
 function legend(step: ExplainStep, display: Display, tableName: string | null): string {
-  const cols = display.spotlight.filter((c) => c !== "*");
+  const cols = display.spotlight
+    .filter((c) => c !== "*")
+    .map((c) => (display.renames[c] ? `${c}, renamed ${display.renames[c]}` : c));
   const named = cols.length ? cols.join(" and ") : "";
   const label = step.label ?? "";
   if (label === "FROM") return `The whole ${tableName ?? ""} table, before anything else happens.`.replace("  ", " ");
@@ -296,6 +313,8 @@ function legend(step: ExplainStep, display: Display, tableName: string | null): 
   if (label === "GROUP BY") return `Highlighted: ${named}, the column the groups are made from. One row for each group.`;
   if (label === "ORDER BY") return `Highlighted: ${named}, the column the rows are sorted by.`;
   if (label.startsWith("SELECT") && display.spotlight.includes("*")) return "Highlighted: every column, because * means all of them.";
+  if (label.startsWith("SELECT") && step.keeps && Object.keys(display.renames).length)
+    return `Highlighted: the columns SELECT keeps (${named}). AS gives a column a new name in the result; the table itself keeps its old name.`;
   if (label.startsWith("SELECT") && step.keeps) return `Highlighted: the columns SELECT keeps (${named}). The rest are left out.`;
   return "";
 }
@@ -383,8 +402,8 @@ export function StepThrough({ explained, sql, empty, preview, replay, reducedMot
   const before = steps[active - 1];
   const display: Display =
     step.keeps && before?.view
-      ? { view: before.view, onlyKept: true, spotlight: step.keeps }
-      : { view: step.view, onlyKept: false, spotlight: step.reads ?? [] };
+      ? { view: before.view, onlyKept: true, spotlight: step.keeps, renames: step.renames ?? {} }
+      : { view: step.view, onlyKept: false, spotlight: step.reads ?? [], renames: {} };
   const tableName = steps.find((s) => s.label === "FROM")?.sql.replace(/^\s*from\s+/i, "").split(/\s/)[0] ?? null;
   const explainLit = legend(step, display, tableName);
   const { list, ranges } = blocks(explained.sql.trim(), steps);
@@ -456,7 +475,7 @@ export function StepThrough({ explained, sql, empty, preview, replay, reducedMot
                     offset={b.start}
                     mark={i === lit ? mark : undefined}
                     plain={look === "later"}
-                    names={i === lit ? display.spotlight : []}
+                    names={i === lit ? [...display.spotlight, ...Object.values(display.renames)] : []}
                   />
                 </code>
               </button>

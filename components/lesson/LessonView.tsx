@@ -26,6 +26,7 @@ import { ReadIt } from "./ReadIt";
 import { SchemaCard } from "./SchemaCard";
 import { SqlLine } from "./SqlLine";
 import { StepThrough } from "./StepThrough";
+import { Teach } from "./Teach";
 
 type PanelTab = "run" | "read" | "result" | "columns";
 
@@ -160,11 +161,11 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
         ? "Read it reads a query once it runs. Fix the word the red pen circled, then run it again."
         : "Run your query, and this tab reads it back to you one step at a time, in the order the database runs it.";
 
-  // On a phone the four divider tabs fit one row with their short names.
+  // In a narrow panel (a phone, or beside a wide lesson) the four divider tabs fit one row with their short names.
   const named = (short: string, long: string) => (
     <>
-      <span className="sm:hidden">{short}</span>
-      <span className="hidden sm:inline">{long}</span>
+      <span className="@lg:hidden">{short}</span>
+      <span className="hidden @lg:inline">{long}</span>
     </>
   );
   const tabs: TabItem<PanelTab>[] = [
@@ -362,7 +363,7 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
           )}
         </NotebookPage>
 
-        <section ref={panel} aria-label="Your query" className="min-w-0 scroll-mt-4">
+        <section ref={panel} aria-label="Your query" className="@container min-w-0 scroll-mt-4">
           {/* Notebook divider tabs standing on the page below; the chosen one joins it. */}
           <div className="flex flex-wrap items-end justify-between gap-x-4 border-b-2 border-ink pr-1">
             <TabList tabs={tabs} value={tab} onChange={setTab} idBase={ids.tabs} label="Your query" variant="index" className="px-0" />
@@ -469,6 +470,8 @@ export function LessonView({ lesson }: { lesson: LessonDefinition }) {
       </section>
 
       <section aria-label="More about this lesson" className="min-w-0 lg:col-start-1 lg:row-start-2">
+        {/* Explained simply: the idea taught like a textbook page, with a worked example on the real data. */}
+        <Teach lesson={lesson} ready={status !== "booting" && !fatal} identifiers={identifiers} />
         <Disclosure>
           {lesson.explanation.long.map((p) => (
             <p key={p}>{p}</p>

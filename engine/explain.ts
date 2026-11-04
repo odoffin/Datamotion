@@ -71,6 +71,8 @@ export interface ExplainStep {
    * (o.id, name, * or c.*), so the table before it can show them spotlighted.
    */
   keeps?: string[];
+  /** SELECT only: the new names AS gives, from each kept column as written (name → product). */
+  renames?: Record<string, string>;
   tweak?: Tweak;
 }
 
@@ -424,18 +426,26 @@ async function conditionTweak(
 
 /** The columns a SELECT list names, when every item is a plain column (or *), with any AS dropped. */
 function plainColumns(sql: string, items: Token[] | null): string[] | null {
+  return plainSelect(sql, items)?.keeps ?? null;
+}
+
+/** A plain SELECT list's columns as written, and the new names AS gives them. */
+function plainSelect(sql: string, items: Token[] | null): { keeps: string[]; renames: Record<string, string> } | null {
   if (!items) return null;
   const out: string[] = [];
+  const renames: Record<string, string> = {};
   for (const item of splitTop(items, (t) => isPunct(t, ","))) {
-    const ts = item.length >= 3 && isWord(item[item.length - 2], "as") ? item.slice(0, -2) : item;
+    const aliased = item.length >= 3 && isWord(item[item.length - 2], "as");
+    const ts = aliased ? item.slice(0, -2) : item;
     const text = textOf(sql, ts);
+    if (aliased) renames[text] = item[item.length - 1]!.text.replace(/^"(.*)"$/, "$1");
     const plain = ts.every((t, i) =>
       i % 2 === 1 ? isPunct(t, ".") : t.kind === "word" || t.kind === "ident" || (t.kind === "op" && t.text === "*" && i === ts.length - 1),
     );
     if (!plain || ts.length % 2 === 0) return null;
     out.push(text);
   }
-  return out.length ? out : null;
+  return out.length ? { keeps: out, renames } : null;
 }
 
 /** Totals written in a clause, as written: COUNT(*), SUM(o.amount). Window functions are not totals. */
@@ -697,7 +707,7 @@ async function explainQuery(sql: string, opts: ExplainOptions): Promise<Explanat
       table: sample(`${prefix}SELECT * FROM (${core})`),
       view: full(`${prefix}SELECT * FROM (${core})`),
       label: distinct ? "SELECT DISTINCT" : "SELECT",
-      ...(plainColumns(sql, distinct ? null : items) ? { keeps: plainColumns(sql, items)! } : {}),
+      ...(plainColumns(sql, distinct ? null : items) ? plainSelect(sql, items)! : {}),
       rows: out ?? undefined,
     });
   }
